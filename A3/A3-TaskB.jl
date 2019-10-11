@@ -1,5 +1,6 @@
 using PyCall
 using PyPlot
+using SpecialFunctions
 # uncomment for non-jupyter use:
 #pygui(true)
 
