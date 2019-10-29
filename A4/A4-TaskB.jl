@@ -5,7 +5,7 @@ using PyCall
 using PyPlot
 using StatsPlots
 
-function mySliceSampler(pdf_log, x_0, w, m, N)
+function mySliceSampler(pdf_log, x_0, w, m, N, burnIn = 1000)
     # REQUIRES MODULES:
     # Random
     #
@@ -15,6 +15,7 @@ function mySliceSampler(pdf_log, x_0, w, m, N)
     # w --> typical slice size, for a window (dimension 1xD)
     # m --> integer limiting the slice size to m*w
     # N --> number of sample points
+    # burnIn --> number of burn-in samples (optional, results will be discarded)
     #
     # OUTPUT:
     # x_s --> sampled x values (NxD), only keep values after full permutations along dimensions
@@ -32,7 +33,7 @@ function mySliceSampler(pdf_log, x_0, w, m, N)
     end
 
 
-    for ii in 1:N
+    for ii in 1:(N+burnIn)
         # Update the new x progressively for each dimension:
         L   = 1*x_0  # R and L need to be of same dimension, because we apply the pdf upon those!
         R   = 1*x_0
@@ -95,8 +96,10 @@ function mySliceSampler(pdf_log, x_0, w, m, N)
         end # end of permutating through dimensions
 
         ### 4) Update the chain:
-        x_s[ii,:] = x_1    # sample point, after one round of permutations
-        pdflog_x_s[ii] = pdflog_x_1 # now contains log_pdf of all new coordinates of new point, since has been updated at each permutation
+        # Just overwrite the burnIn by using modular arithmetic:
+        i = 1 + (ii-1)%N    # gives 1,2,3,...N,1,2,3,...,(N+burnIn)
+        x_s[i,:] = x_1    # sample point, after one round of permutations
+        pdflog_x_s[i] = pdflog_x_1 # now contains log_pdf of all new coordinates of new point, since has been updated at each permutation
         # note that x_0 has been updated during the permutations
 
     end
@@ -321,7 +324,10 @@ hdi(dθ)
 #%% Method 3
 dθ = (chain - chain2)
 dθ = reshape(dθ,:)      # to get an Array{Float64,1}
-histogram(dθ,bins=100)
+histogram(dθ, bins=100, normalize=:pdf, label="d_theta")
+density!(dθ,linewidth=3,label="d_theta")
+#%%
 diff_hdi = hdi(dθ)
+#%%
 using Plots
 Plots.savefig("/home/johhub/Desktop/ABDA/A4/A4-B-hist.pdf")
