@@ -4,6 +4,8 @@ using Random
 using LinearAlgebra
 using Plots
 
+# adaptation form Jesper Martinssons implementation of the original slice mySliceSampler:
+# https://github.com/jespermartinsson/ABDA.jl/blob/master/src/stats.jl
 function mySliceSampler(pdf_log, x_0, w, m, N, burnIn = 1000)
     # REQUIRES MODULES:
     # Random
@@ -96,7 +98,7 @@ function mySliceSampler(pdf_log, x_0, w, m, N, burnIn = 1000)
 
         ### 4) Update the chain:
         # Just overwrite the burnIn by using modular arithmetic:
-        i = 1 + (ii-1)%N    # gives 1,2,3,...N,1,2,3,...,(N+burnIn)
+        i = 1 + (ii-1)%N    # gives 1,2,3,...N,1,2,3,...,burnIn
         x_s[i,:] = x_1    # sample point, after one round of permutations
         pdflog_x_s[i] = pdflog_x_1 # now contains log_pdf of all new coordinates of new point, since has been updated at each permutation
         # note that x_0 has been updated during the permutations
