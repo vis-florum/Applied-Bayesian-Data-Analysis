@@ -534,7 +534,7 @@ for n = 1:Int(ceil(J/5))
         vline!([θ_means_log[j]], linewidth=3, color=curColor[j])
     end
 
-Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Stan-$n.pdf")
+Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-$n.pdf")
 
 end
 
