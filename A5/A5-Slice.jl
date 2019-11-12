@@ -335,6 +335,7 @@ m = 100
 
 #%% MCMC run
 @time chain, pdf = mySliceSampler(log_posterior,x_start,w,m,N,burnIn);
+# takes around 550 seconds on my machine (4 cores, i7-7500U 2,7 GHz x 2 each, on Linux)
 
 #%% Transform back (undo mean-centering and scaling and go to non-log space)
 #
@@ -490,17 +491,9 @@ println("Δ Mean = ",mean_web - μ_bar)
 
 
 ########################  Task A-3 #############################################
-#%% Compare hierarchical theta to individual theta using sample means
-histogram(θ_trans_unLog[:,1], bins=100, normalize=:pdf,alpha=0.2, linealpha=0.0)
-n = 10
-for i in 2:34
-    histogram!(θ_trans_unLog[:,i], bins=100, normalize=:pdf, alpha=0.2, linealpha=0.0)
-end
-histogram!(θ_trans_unLog[:,n+1], bins=100, normalize=:pdf, alpha=0.2, linealpha=0.0)
-histogram!(μ_trans_unLog, bins=100, normalize=:pdf, alpha=1, linealpha=0.1)
+# Compare hierarchical theta to individual theta using sample means
 
-#%% New model without hierarchy
-# Logarithmic sample means
+#%% Logarithmic sample means
 θ_means_log = zeros(J)
 #for i in 1:I
 #    n = length(findall(x -> x==ind[i],ind)) # finding the number of data points for each individual
@@ -511,8 +504,37 @@ for j in 1:J
     θ_means_log[j] = mean(logy[ind .== j])
 end
 
-θ_means_log
-#%%
+
+#%% Plot into one figure
+# Get ordered indices:
+sortIdx = sortperm(θ_means_log)
+# Limits for the figure
+myXlims = (minimum(θ_trans),maximum(θ_trans))
+# Initialise the subplots
+StatsPlots.plot(layout=(J, 1),size = (1000, 1500))
+# Plot each theta:
+for i in 1:(J-1)
+    j = sortIdx[i]
+    # Sampled thetas and their mean:
+    histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
+            ann=(myXlims[1]+.05,4,"ind $j:"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims)
+    vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=i, legend=false)
+
+    # The (log) sample means of the initial data:
+    vline!([θ_means_log[j]],linewidth=3, color="red", subplot=i, legend=false)
+end
+
+# The last one separately so I can see it in Hydrogen:
+j = sortIdx[J]
+histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
+            ann=(myXlims[1]+.05,10,"ind $J:"),ticks=nothing, yaxis=false, subplot=J, xlims=myXlims)
+vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=J, legend=false)
+vline!([θ_means_log[j]],linewidth=3, color="red", subplot=J, legend=false)
+
+Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-All.pdf")
+
+
+# --------------- Old Code (please ignore) -------------------------
 # theta ~ N(θ_means_log,sigma)
 
 #histogram(θ_trans[:,1], bins=100, normalize=:pdf,label="theta from MCMC",alpha=0.2, linealpha=0.0)
@@ -527,19 +549,14 @@ end
 #end
 
 # Get a color map:
-curColor = get_color_palette(:auto, plot_color(:white), J)
-for n = 1:Int(ceil(J/5))
-    plot()
-    for j in ((n-1)*5+1):min((n*5),J)
-        histogram!(θ_trans[:,j], bins=100, normalize=:pdf,legend=false,alpha=0.2, linealpha=0.0, color=curColor[j])
-        vline!([θ_means_log[j]], linewidth=3, color=curColor[j])
-    end
+#curColor = get_color_palette(:auto, plot_color(:white), J)
+#for n = 1:Int(ceil(J/5))
+#    plot()
+#    for j in ((n-1)*5+1):min((n*5),J)
+#        histogram!(θ_trans[:,j], bins=100, normalize=:pdf,legend=false,alpha=0.2, linealpha=0.0, color=curColor[j])
+#        vline!([θ_means_log[j]], linewidth=3, color=curColor[j])
+#    end
 
-Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-$n.pdf")
+#Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-$n.pdf")
 
-end
-
-#%%
-
-histogram(θ_trans, layout=(5,1), bins=100, normalize=:pdf,legend=false,alpha=0.2, linealpha=0.0)
-vline!(θ_means_log, layout=(5,1), linewidth=3)
+#end
