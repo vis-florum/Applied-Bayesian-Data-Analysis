@@ -250,19 +250,20 @@ rc, chn, cnames = stan(myModel,
 #           y  ~ LogNormal(θ_trans, σ_trans^2)
 #         E[y] = exp(θ_trans + σ_trans^2 / 2)
 #
-# The same is true for the hyperdistribution yielding theta:
+# The same is true for the prior distribution yielding theta:
+# ()μ and τ come from hyperdistributions)
 #                         θ ~ Normal(μ,τ^2)
 #     (θ_trans - m_y) / σ_y = μ + τ * xi
 #                   θ_trans = μ*σ_y + m_y + τ*σ_y*xi
 #                   θ_trans = μ_trans + τ_trans*xi
 #                   θ_trans ~ Normal(μ_trans, τ_trans^2)
 #
-#                    log(y) ~ μ_trans + τ_trans*xi + σ_trans*x
+#                    log(y) = μ_trans + τ_trans*xi + σ_trans*x
 # xi and x are both ~ N(0,1)
 # a sum of two distributions, i.e. here N(0,τ_trans^2) + N(0,σ_trans^2), are a
 # convolution of the two, thus their sum is: N(0,τ_trans^2 + σ_trans^2)
 # assuming independence, and therefore
-#                    log(y) ~ μ_trans + sqrt(τ_trans^2 + σ_trans^2)*x
+#                    log(y) = μ_trans + sqrt(τ_trans^2 + σ_trans^2)*x
 #                    log(y) ~ Normal(μ_trans, (σ_trans^2 + τ_trans^2))
 #                      E[y] = exp(μ_trans + (σ_trans^2 + τ_trans^2) / 2)
 #                      E[y] = exp(μ_trans + σ_trans^2 / 2 + τ_trans^2 / 2)
