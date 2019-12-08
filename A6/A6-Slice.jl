@@ -1,9 +1,9 @@
 #using Revise
+using Distributed
 @everywhere using Random
 @everywhere using Statistics
 using Plots
 using StatsPlots
-using Distributed
 using SharedArrays
 
 
@@ -52,11 +52,11 @@ using SharedArrays
 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34];
 
 # Indicator for each individual j whether he/she is a child or not:
-child_j = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
+@everywhere child_j = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
 
 # Indicator for each observations i whether it comes from a child or not:
-child_i = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+@everywhere child_i = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -271,6 +271,8 @@ end
     return ci
 end
 
+
+### Priors, Likelihoods, Posteriors
 @everywhere function log_prior_flat(X::Float64)
     return 0.0  # or any other constant value, for the posterior it doesn't matter
 end
@@ -287,25 +289,52 @@ end
 end
 
 
-@everywhere function log_normal(θ::Array{Float64},μ::Float64,τ::Float64)
-    # Return the joint pdf of an array of thetas, i.e. the sum in log-space
+"""
+    log_normal(Y[Array], mean, stDev)
 
+Return the joint `pdf` of an array of Data points, i.e. the sum in log-space.
+
+# Input:
+Y    = data points
+mean = mean value
+stD  = standard deviation (σ)
+
+# Output:
+joint normal pdf in log space
+
+# Examples
+```julia-repl
+julia> log_normal([1.0, 2.0], 0.0, 1.0)
+-2.5
+```
+"""
+
+@everywhere function log_normal(Y::Array{Float64},mean::Float64,stDev::Float64)
+    # Logarithmise the normal pdfs in series:
     # We can leave out the 1/sqrt(2π) since it does not change sampling from the posterior
-    return sum(-log(τ) .- 0.5 .* ((θ .- μ) ./ τ).^2)
+    return sum(-log(stDev) .- 0.5 .* ((Y .- mean) ./ stDev).^2)
 end
 
 
-@everywhere function log_lklhd_fct(jointParams::Array{Float64},zlogy::Array{Float64,1},ind::Array{Int64,1})
+
+@everywhere function log_lklhd_fct(jointParams::Array{Float64},Y::Array{Float64,1},ind::Array{Int64,1},child_j::Array{Int64,1})
     # return the joint lklhd of the given input data
-    J = length(jointParams) - 3
-    θ = jointParams[1:J]
-    μ, σ, τ  = jointParams[(J+1):end]
+    # cannot sample θ any longer, since its mean shifts for each individual, now sample ζ
+    J = length(jointParams) - 4
+    ζ = jointParams[1:J]
+    ϕ_0, σ, τ, ϕ_1  = jointParams[(J+1):end]
+
+    μ = ϕ_0 .+ ϕ_1 .* child_j*1.0    # current sampled μ for each individual
+    θ = μ .+ ζ .* τ                  # current sampled θ for each individual (normal around μ with std τ)
+                                    # therefore ζ must be ~ normal(0,1)
 
     jointLklhd = 0.0
 
     if (σ > 0)
-        for i in 1:length(zlogy)
-            jointLklhd += -log(σ) - 0.5 * ((zlogy[i] - θ[ind[i]]) / σ)^2
+        # Logarithmise the normal pdfs in series:
+        # summing up:
+        for i in 1:length(Y)
+            jointLklhd += -log(σ) - 0.5 * ((Y[i] - θ[ind[i]]) / σ)^2
         end
     else
         jointLklhd = -Inf
@@ -317,12 +346,21 @@ end
 
 @everywhere function log_priors(jointParams::Array{Float64})
     # The joint log-pdf of all the priors in the model
-    J = length(jointParams) - 3
-    θ = jointParams[1:J]
-    μ, σ, τ  = jointParams[(J+1):end]
+    # cannot sample θ any longer, since its mean shifts for each individual, now sample ζ
+    J = length(jointParams) - 4
+    ζ = jointParams[1:J]
+    ϕ_0, σ, τ, ϕ_1  = jointParams[(J+1):end]
+
+    #μ = ϕ_0 .+ ϕ_1 * child_i    # current sampled μ for each individual
+    #θ = μ .+ ζ * τ              # current sampled θ for each individual (normal around μ with std τ)
+                                # therefore ζ must be ~ normal(0,1)
 
     if (σ > 0) && (τ > 0)
-        return log_normal(θ,μ,τ) + log_prior_flat(μ) + log_prior_flat_positiveOnly(σ) + log_prior_flat_positiveOnly(τ)
+        return log_normal(ζ,0.0,1.0) +
+               log_prior_flat(ϕ_0) +
+               log_prior_flat(ϕ_1) +
+               log_prior_flat_positiveOnly(σ) +
+               log_prior_flat_positiveOnly(τ)
     else
         return -Inf
     end
@@ -342,27 +380,27 @@ I = length(y)       # number of observations
 
 
 #%% Concretise the functions by including the data #############################
-@everywhere log_lklhd(jointParams::Array{Float64}) = log_lklhd_fct(jointParams::Array{Float64}, zlogy, ind)
+@everywhere log_lklhd(jointParams::Array{Float64}) = log_lklhd_fct(jointParams::Array{Float64}, zlogy, ind, child_j)
 @everywhere log_posterior(jointParams::Array{Float64}) = log_lklhd(jointParams::Array{Float64}) + log_priors(jointParams::Array{Float64})
 
 
 ################################################################################
 ############################# MCMC #############################################
 #%% Chain Setup
-N = 10^5
+N = 10^4
 burnIn = 10^2
-w = ones(Float64,J+3) * 0.1         # typical window size
+w = ones(Float64,J+4) * 0.1         # typical window size
 m = 100                             # multiplier for maximum window size
 
 #%% MCMC run, make several chains
-chain = SharedArray{Float64}(N,J+3,4);
+chain = SharedArray{Float64}(N,J+4,4);
 pdf = SharedArray{Float64}(N,4);
 
 # (using threads for parallel computing (other stuff didn't work)):
 # Threads.@threads led to problems too
 # now using @distributed, prefix with @sync to wait for completion
 @sync @distributed for k in 1:4
-    x_start = rand(Float64,J+3) * 0.5   # initial vector
+    x_start = rand(Float64,J+4) * 0.5   # initial vector
     chain[:,:,k], pdf[:,k] = mySliceSampler(log_posterior,x_start,w,m,N,burnIn);
 end
 # My machine: 4 cores, i7-7500U 2,7 GHz x 2 each, on Linux
@@ -370,7 +408,13 @@ end
 # N=10^5 takes around 117 (with threads: 132) seconds. if not parallel, then 235 seconds
 
 #%%
-histogram(chain[:,J+3,1],bins=100,linealpha=0.0,alpha=0.5,normalize=:pdf)
+# Calculate ESS here
+
+#%% Fuse the chains
+chain = sum(chain,dims=3)
+
+#%%
+histogram(chain[:,J+4],bins=100,linealpha=0.0,alpha=0.5,normalize=:pdf)
 Plots.savefig("/home/johhub/Desktop/ABDA/A6/test.pdf")
 
 #%% Transform back (undo mean-centering and scaling and go to non-log space)
@@ -409,10 +453,11 @@ Plots.savefig("/home/johhub/Desktop/ABDA/A6/test.pdf")
 #                      E[y] = exp(μ_trans + σ_trans^2 / 2 + τ_trans^2 / 2)
 
 # Originals
-# θ = chain[:,1:J]
-# μ = chain[:,(J+1)]
+# ζ = chain[:,1:J]
+# ϕ_0 = chain[:,(J+1)]
 # σ = chain[:,(J+2)]
 # τ = chain[:,(J+3)]
+# ϕ_1 = chain[:,(J+3)]
 #
 # # Un-scale and un-mean-centre:
 # θ_trans = θ .* logStd .+ logMean
