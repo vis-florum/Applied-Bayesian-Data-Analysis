@@ -1,7 +1,8 @@
-using Revise
+#using Revise
 using CmdStan
 using Plots
 using StatsPlots
+using AxisArrays
 
 #%% Input Data #################################################################
 y = [607, 583, 521, 494, 369, 782, 570, 678, 467, 620, 425, 395, 346, 361, 310,
@@ -41,6 +42,25 @@ ind = [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 5, 5, 5, 5,
    28, 28, 28, 28, 28, 28, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 30, 30, 30,
    30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 33, 34, 34, 34, 34, 34,
    34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34];
+
+# Indicator for each individual j whether he/she is a child or not:
+child_j = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
+           0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+
+# Indicator for each observations i whether it comes from a child or not:
+child_i = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1,
+1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1,
+1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
 
 #%% Functions ##################################################################
 ## Jespers HDI:
@@ -161,20 +181,21 @@ zlogy = (logy .- logMean) ./ logStd;
 #projDir = dirname(@__FILE__)
 
 # If run from Jupyter/Hydrogen, maybe change to suit you:
-projDir= "/home/johhub/Desktop/ABDA/A5"
+projDir= "/home/johhub/Desktop/ABDA/A6"
 #projDir= "/lhome/johhub/Desktop/ABDA/A5"
 tmpDir = projDir*"/tmp"
 
 noOfChains = 4
-N = 10^6 / noOfChains   # more than 10^6 samples make the histograms thin
+N = 10^4 / noOfChains   # more than 10^6 samples make the histograms thin
 keepchains = false
-burnIn = 10^4
+burnIn = 10^3
 
 modelString = "
 data {
     int<lower=1> J;         // number of individuals for which data was observed
     int<lower=1> I;         // observation number in the total vector
     int<lower=1> ID[I];     // individual ID in the total vector
+    int<lower=0> ISKID[J];  // identifief for whether individual is a kid
     real zlogy[I];           // reaction time measurements in the total vector
 }
 parameters {
@@ -182,6 +203,7 @@ parameters {
     real<lower=0.000001> sigma;    // same std for all individuals
     real mu;                // mean for the group
     real<lower=0.000001> tau;      // std of the group (only on group = all individuals)
+    real phi;
 }
 transformed parameters { // no transformed variables to use
 // how to transform here?
@@ -190,15 +212,15 @@ model {
     for (i in 1:I)
         zlogy[i] ~ normal(theta[ID[i]],sigma);
     for (j in 1:J)
-        theta[j] ~ normal(mu,tau);
-    // no prior for sigma and tau is equivalent to a uniform prior
+        theta[j] ~ normal(mu + phi*ISKID[j],tau);
+    // no prior is equivalent to a uniform prior
     // however this is an <<improper>> prior and can lead to problems
 }
 generated quantities {
-    real zlogy_pred;
-    real theta_pred;
-    theta_pred = normal_rng(mu,tau);
-    zlogy_pred = normal_rng(theta_pred,sigma);
+    // real zlogy_pred;
+    // real theta_pred;
+    // theta_pred = normal_rng(mu,tau);
+    // zlogy_pred = normal_rng(theta_pred,sigma);
 }
 ";
 
@@ -208,7 +230,8 @@ generated quantities {
 observedData = Dict("I" => I,
                     "J" => J,
                     "zlogy" => zlogy,
-                    "ID" => ind);
+                    "ID" => ind,
+                    "ISKID" => child_j);
 
 ### 3) Chain specs
 myModel = Stanmodel(
@@ -216,7 +239,7 @@ myModel = Stanmodel(
                        num_warmup=burnIn,
                        num_samples=N,
                        thin=1),   # thin: Period between saved samples
-                name = "reactionTime-V1",
+                name = "reactionTime-A6",
                 model = modelString,
                 printsummary = false,
                 tmpdir = tmpDir,
@@ -269,7 +292,7 @@ rc, chn, cnames = stan(myModel,
 #                      E[y] = exp(μ_trans + σ_trans^2 / 2 + τ_trans^2 / 2)
 
 #%% check the names and positions of the vars (might change with naming)
-chn.value[1,:,1]
+println(chn.value[1,:,1])
 
 #%%
 # Originals
@@ -282,170 +305,176 @@ chn.value[1,:,1]
 # 44 = theta_pred
 # 46 = logy_pred
 
+# Access the axis array like this:
+ϕ = 1.0 * chn.value[Axis{:var}("phi")][:]
+
+histogram(ϕ,bins=100,linealpha=0.0,alpha=0.5,normalize=:pdf)
+Plots.savefig("/home/johhub/Desktop/ABDA/A6/test-Stan.pdf")
+
 # Throw all the chain samples in a single vetor (vertical concatenation):
 θ = 1.0 * chn.value[:,10:(J+10-1),1]
 μ = 1.0 * chn.value[:,5,1]
 σ = 1.0 * chn.value[:,7,1]
 τ = 1.0 * chn.value[:,9,1]
 logy_pred = 1.0 * chn.value[:,46,1]
-for i in 2:noOfChains
-    global θ = vcat(θ, 1.0 * chn.value[:,10:(J+10-1),i])
-    global μ = vcat(μ, 1.0 * chn.value[:,5,i])
-    global σ = vcat(σ, 1.0 * chn.value[:,7,i])
-    global τ = vcat(τ, 1.0 * chn.value[:,9,i])
-    global logy_pred = vcat(logy_pred, 1.0 * chn.value[:,46,i])
-end
+#for i in 2:noOfChains
+#    global θ = vcat(θ, 1.0 * chn.value[:,10:(J+10-1),i])
+#    global μ = vcat(μ, 1.0 * chn.value[:,5,i])
+#    global σ = vcat(σ, 1.0 * chn.value[:,7,i])
+#    global τ = vcat(τ, 1.0 * chn.value[:,9,i])
+#    global logy_pred = vcat(logy_pred, 1.0 * chn.value[:,46,i])
+#end
 
 
 #%%
 # Un-scale and un-mean-centre:
-θ_trans = θ .* logStd .+ logMean
+#θ_trans = θ .* logStd .+ logMean
 #θ_trans = θ
-μ_trans = μ .* logStd .+ logMean
+#μ_trans = μ .* logStd .+ logMean
 #μ_trans = μ
-σ_trans = σ .* logStd
+#σ_trans = σ .* logStd
 #σ_trans = σ
-τ_trans = τ .* logStd
+#τ_trans = τ .* logStd
 #τ_trans = τ
-logy_trans = logy_pred .* logStd .+ logMean
+#logy_trans = logy_pred .* logStd .+ logMean
 #logy_trans = logy_pred
 
 # Get into non-log space:
-θ_trans_unLog = exp.(θ_trans .+ 0.5 .* repeat(σ_trans,1,J).^2);
-μ_trans_unLog = exp.(μ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
-logy_trans_unLog = exp.(logy_trans);
+#θ_trans_unLog = exp.(θ_trans .+ 0.5 .* repeat(σ_trans,1,J).^2);
+#μ_trans_unLog = exp.(μ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
+#logy_trans_unLog = exp.(logy_trans);
 
 
 ################################################################################
 ############################# TASKS ############################################
 
 ######################## Task A-1 (the Dude)####################################
-#%% Mode, Mean, HDIs
-dude = θ_trans_unLog[:,4]
-ω = mean(find_mode(dude))
-μ_bar = mean(dude);
-left,right = hdi(dude);
-
-#%% Plotting
-histogram(dude, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-dPlot = density!(dude,linewidth=3,label="density estimate")
-dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-dTopPoint = maximum(dCurve)
-plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-       annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-       annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-       annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-       annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-
-Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A1-Dude-Stan.pdf")
-
-
-######################## Task A-2-a-i (expectation new individual) #############
-#%% Mode, Mean, HDIs
-samplePts = μ_trans_unLog
-ω = mean(find_mode(samplePts))
-μ_bar = mean(samplePts);
-left,right = hdi(samplePts);
-
-#%% Plotting
-histogram(samplePts, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-dPlot = density!(samplePts,linewidth=3,label="density estimate")
-dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-dTopPoint = maximum(dCurve)
-plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-       annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-       annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-       annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-       annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-
-Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Group-Stan.pdf")
-
-
-########################  Task A-2-a-ii (new individual prediction)  ###########
-samplePts = logy_trans_unLog
-ω = mean(find_mode(samplePts))
-μ_bar = mean(samplePts);
-med = median(samplePts);
-left,right = hdi(samplePts);
-
-histogram(samplePts, bins=100, normalize=:pdf, label="Simulation", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-dPlot = density!(samplePts,linewidth=3,label="density estimate")
-dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-dTopPoint = maximum(dCurve)
-plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-       annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-       annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-       annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-       annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-plot!([(med,0),(med,dTopPoint)], linewidth=3, color="purple", label="median",
-       annotations = (med, 0, text("$(Int(round(med)))",:purple,:bottom)))
-
-Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Pred-Stan.pdf")
-
-
-########################  Task A-2-b (compare to website statistics)  ##########
-#%% Taken from the homepage:
-median_web = 273.0
-mean_web = 284.0
-println("Δ Median = ",median_web - med)  # using median from previous task
-println("Δ Mean = ",mean_web - μ_bar)    # using mean from previous task
-
-
-########################  Task A-3 #############################################
-# Compare hierarchical theta to individual theta using sample means
-
-#%% Logarithmic sample means
-θ_means_log = zeros(J)
-for j in 1:J
-    θ_means_log[j] = mean(logy[ind .== j])
-end
-
-#%% Plot into one figure
-# Get ordered indices:
-sortIdx = sortperm(θ_means_log)
-# Limits for the figure
-myXlims = (minimum(θ_trans),maximum(θ_trans))
-# Initialise the subplots
-StatsPlots.plot(layout=(J, 1),size = (1000, 1500))
-# Plot each theta:
-for i in 1:(J-1)
-    j = sortIdx[i]
-    # Sampled thetas and their mean:
-    histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
-            ann=(myXlims[1]+.05,4,"ind $j:"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims)
-    vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=i, legend=false)
-
-    # The (log) sample means of the initial data:
-    vline!([θ_means_log[j]],linewidth=3, color="red", subplot=i, legend=false)
-end
-
-# The last one separately so I can see it in Hydrogen:
-j = sortIdx[J]
-histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
-            ann=(myXlims[1]+.05,10,"ind $J:"),ticks=nothing, yaxis=false, subplot=J, xlims=myXlims)
-vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=J, legend=false)
-vline!([θ_means_log[j]],linewidth=3, color="red", subplot=J, legend=false)
-
-Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-All.pdf")
-
-
-# --------------- Old Code (please ignore) -------------------------
-# Get a color map:
-#curColor = get_color_palette(:auto, plot_color(:white), J)
-#for n = 1:Int(ceil(J/5))
-#    plot()
-#    for j in ((n-1)*5+1):min((n*5),J)
-#        histogram!(θ_trans[:,j], bins=100, normalize=:pdf,legend=false,alpha=0.2, linealpha=0.0, color=curColor[j])
-#        vline!([θ_means_log[j]], linewidth=3, color=curColor[j])
-#    end
-#    Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Stan-$n.pdf")
-#end
+# #%% Mode, Mean, HDIs
+# dude = θ_trans_unLog[:,4]
+# ω = mean(find_mode(dude))
+# μ_bar = mean(dude);
+# left,right = hdi(dude);
+#
+# #%% Plotting
+# histogram(dude, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
+# dPlot = density!(dude,linewidth=3,label="density estimate")
+# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
+# dTopPoint = maximum(dCurve)
+# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
+#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
+# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
+#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
+# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
+#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
+# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
+#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
+#
+# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A1-Dude-Stan.pdf")
+#
+#
+# ######################## Task A-2-a-i (expectation new individual) #############
+# #%% Mode, Mean, HDIs
+# samplePts = μ_trans_unLog
+# ω = mean(find_mode(samplePts))
+# μ_bar = mean(samplePts);
+# left,right = hdi(samplePts);
+#
+# #%% Plotting
+# histogram(samplePts, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
+# dPlot = density!(samplePts,linewidth=3,label="density estimate")
+# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
+# dTopPoint = maximum(dCurve)
+# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
+#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
+# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
+#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
+# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
+#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
+# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
+#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
+#
+# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Group-Stan.pdf")
+#
+#
+# ########################  Task A-2-a-ii (new individual prediction)  ###########
+# samplePts = logy_trans_unLog
+# ω = mean(find_mode(samplePts))
+# μ_bar = mean(samplePts);
+# med = median(samplePts);
+# left,right = hdi(samplePts);
+#
+# histogram(samplePts, bins=100, normalize=:pdf, label="Simulation", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
+# dPlot = density!(samplePts,linewidth=3,label="density estimate")
+# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
+# dTopPoint = maximum(dCurve)
+# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
+#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
+# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
+#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
+# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
+#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
+# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
+#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
+# plot!([(med,0),(med,dTopPoint)], linewidth=3, color="purple", label="median",
+#        annotations = (med, 0, text("$(Int(round(med)))",:purple,:bottom)))
+#
+# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Pred-Stan.pdf")
+#
+#
+# ########################  Task A-2-b (compare to website statistics)  ##########
+# #%% Taken from the homepage:
+# median_web = 273.0
+# mean_web = 284.0
+# println("Δ Median = ",median_web - med)  # using median from previous task
+# println("Δ Mean = ",mean_web - μ_bar)    # using mean from previous task
+#
+#
+# ########################  Task A-3 #############################################
+# # Compare hierarchical theta to individual theta using sample means
+#
+# #%% Logarithmic sample means
+# θ_means_log = zeros(J)
+# for j in 1:J
+#     θ_means_log[j] = mean(logy[ind .== j])
+# end
+#
+# #%% Plot into one figure
+# # Get ordered indices:
+# sortIdx = sortperm(θ_means_log)
+# # Limits for the figure
+# myXlims = (minimum(θ_trans),maximum(θ_trans))
+# # Initialise the subplots
+# StatsPlots.plot(layout=(J, 1),size = (1000, 1500))
+# # Plot each theta:
+# for i in 1:(J-1)
+#     j = sortIdx[i]
+#     # Sampled thetas and their mean:
+#     histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
+#             ann=(myXlims[1]+.05,4,"ind $j:"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims)
+#     vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=i, legend=false)
+#
+#     # The (log) sample means of the initial data:
+#     vline!([θ_means_log[j]],linewidth=3, color="red", subplot=i, legend=false)
+# end
+#
+# # The last one separately so I can see it in Hydrogen:
+# j = sortIdx[J]
+# histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
+#             ann=(myXlims[1]+.05,10,"ind $J:"),ticks=nothing, yaxis=false, subplot=J, xlims=myXlims)
+# vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=J, legend=false)
+# vline!([θ_means_log[j]],linewidth=3, color="red", subplot=J, legend=false)
+#
+# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-All.pdf")
+#
+#
+# # --------------- Old Code (please ignore) -------------------------
+# # Get a color map:
+# #curColor = get_color_palette(:auto, plot_color(:white), J)
+# #for n = 1:Int(ceil(J/5))
+# #    plot()
+# #    for j in ((n-1)*5+1):min((n*5),J)
+# #        histogram!(θ_trans[:,j], bins=100, normalize=:pdf,legend=false,alpha=0.2, linealpha=0.0, color=curColor[j])
+# #        vline!([θ_means_log[j]], linewidth=3, color=curColor[j])
+# #    end
+# #    Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Stan-$n.pdf")
+# #end
