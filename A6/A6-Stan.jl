@@ -158,6 +158,30 @@ function find_mode(sample_pts;runs=2)
     return ci
 end
 
+# A function to make the plots with HDIs
+function makeDistributionPlot(X)
+    #%% Mode, Mean, HDIs
+    ω = mean(find_mode(X))
+    μ_bar = mean(X);
+    left,right = hdi(X);
+
+    #%% Plotting
+    # specify statsplot?
+    histogram(X, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
+    dPlot = density!(X,linewidth=3,label="density estimate")
+    dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
+    dTopPoint = maximum(dCurve)
+    plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
+           annotations = (left, dTopPoint/2, text("$(round(left,sigdigits=4))",:green,:bottom)))
+    plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
+           annotations = (right, dTopPoint/2, text("$(round(right,sigdigits=4))",:green,:bottom)))
+    plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
+           annotations = (μ_bar, 0, text("$(round(μ_bar,sigdigits=4))",:blue,:top)))
+    plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
+           annotations = (ω, dTopPoint, text("$(round(ω,sigdigits=4))",:red,:bottom)))
+
+end
+
 #%% Logarithmise and Transform Data ############################################
 J = maximum(ind)    # number of individuals
 I = length(y)       # number of observations
@@ -186,9 +210,10 @@ projDir= "/home/johhub/Desktop/ABDA/A6"
 tmpDir = projDir*"/tmp"
 
 noOfChains = 4
-N = 10^4 / noOfChains   # more than 10^6 samples make the histograms thin
+N = 10^5 / noOfChains   # more than 10^6 samples make the histograms thin
+N = convert(Int64, N)
 keepchains = false
-burnIn = 10^3
+burnIn = 10^4
 
 modelString = "
 data {
@@ -263,26 +288,38 @@ rc, chn, cnames = stan(myModel,
 #                    z_logy   ~  Normal(θ, σ^2)
 #       (log(y) - m_y) / σ_y  ~  Normal(θ, σ^2)
 #       (log(y) - m_y) / σ_y  =  θ + σ * x
-# where y is the observation and x the predictor, then
+# where y is the observation and x the predictor,
+# and x is Normal(0,1), then
 #       log(y) = (θ + σ * x) * σ_y + m_y
 #       log(y) = θ*σ_y + σ*σ_y*x  + m_y
 #       log(y) = θ*σ_y + m_y + σ*σ_y*x
+#
+#  say θ_trans = θ*σ_y + m_y
+#      σ_trans = σ*σ_y
+#
 #       log(y) = θ_trans + σ_trans * x
 #       log(y) ~ Normal(θ_trans, σ_trans^2)
 #           y  = exp(θ_trans + σ_trans * x)
 #           y  ~ LogNormal(θ_trans, σ_trans^2)
-#         E[y] = exp(θ_trans + σ_trans^2 / 2)
+#         E[y] = exp(θ_trans + σ_trans^2 / 2)   # from Wiki
+#        which is what θ, the individual mean, expresses
 #
-# The same is true for the prior distribution yielding theta:
-# ()μ and τ come from hyperdistributions)
-#                         θ ~ Normal(μ,τ^2)
-#     (θ_trans - m_y) / σ_y = μ + τ * xi
-#                   θ_trans = μ*σ_y + m_y + τ*σ_y*xi
-#                   θ_trans = μ_trans + τ_trans*xi
+# The same is true for the prior distribution yielding θ:
+# (μ and τ are hyperparameters):
+#                         θ ~ Normal(μ_0 + ϕ,τ^2)   # for kids
+#                         θ ~ Normal(μ_0 + 0,τ^2)   # for adults
+#     (θ_trans - m_y) / σ_y = (μ_0 + ϕ[0,1]) + τ * ξ
+#   where ξ ~ Normal(0,1)
+#
+#                   θ_trans = (μ_0 + ϕ[0,1])*σ_y + m_y + τ*σ_y*ξ
+#   say μ_0_trans =  μ_0*σ_y + m_y
+#       μ_ϕ_trans = (μ_0 + ϕ)*σ_y + m_y
+#         τ_trans = τ*σ_y
+#                   θ_trans = μ_trans + τ_trans*ξ
 #                   θ_trans ~ Normal(μ_trans, τ_trans^2)
 #
-#                    log(y) = μ_trans + τ_trans*xi + σ_trans*x
-# xi and x are both ~ N(0,1)
+#                    log(y) = μ_trans + τ_trans*ξ + σ_trans*x
+# ξ and x are both ~ N(0,1)
 # a sum of two distributions, i.e. here N(0,τ_trans^2) + N(0,σ_trans^2), are a
 # convolution of the two, thus their sum is: N(0,τ_trans^2 + σ_trans^2)
 # assuming independence, and therefore
@@ -290,9 +327,10 @@ rc, chn, cnames = stan(myModel,
 #                    log(y) ~ Normal(μ_trans, (σ_trans^2 + τ_trans^2))
 #                      E[y] = exp(μ_trans + (σ_trans^2 + τ_trans^2) / 2)
 #                      E[y] = exp(μ_trans + σ_trans^2 / 2 + τ_trans^2 / 2)
+#                 which is what μ, the group mean, expresses
 
 #%% check the names and positions of the vars (might change with naming)
-println(chn.value[1,:,1])
+chn.value[1,:,1]
 
 #%%
 # Originals
@@ -306,93 +344,68 @@ println(chn.value[1,:,1])
 # 46 = logy_pred
 
 # Access the axis array like this:
-ϕ = 1.0 * chn.value[Axis{:var}("phi")][:]
+ϕ = 1.0 * chn.value[Axis{:var}("phi")][:]   # all chains in one sausage
+θ = Array{Float64,2}(undef,N*noOfChains,J)
+for j in 1:J
+    θ[:,j] = 1.0 * chn.value[Axis{:var}("theta.$j")][:]   # all chains in one sausage
+end
+μ = 1.0 * chn.value[Axis{:var}("mu")][:]
+σ = 1.0 * chn.value[Axis{:var}("sigma")][:]
+τ = 1.0 * chn.value[Axis{:var}("tau")][:]
 
-histogram(ϕ,bins=100,linealpha=0.0,alpha=0.5,normalize=:pdf)
+makeDistributionPlot(ϕ)
+
 Plots.savefig("/home/johhub/Desktop/ABDA/A6/test-Stan.pdf")
 
-# Throw all the chain samples in a single vetor (vertical concatenation):
-θ = 1.0 * chn.value[:,10:(J+10-1),1]
-μ = 1.0 * chn.value[:,5,1]
-σ = 1.0 * chn.value[:,7,1]
-τ = 1.0 * chn.value[:,9,1]
-logy_pred = 1.0 * chn.value[:,46,1]
-#for i in 2:noOfChains
-#    global θ = vcat(θ, 1.0 * chn.value[:,10:(J+10-1),i])
-#    global μ = vcat(μ, 1.0 * chn.value[:,5,i])
-#    global σ = vcat(σ, 1.0 * chn.value[:,7,i])
-#    global τ = vcat(τ, 1.0 * chn.value[:,9,i])
-#    global logy_pred = vcat(logy_pred, 1.0 * chn.value[:,46,i])
-#end
+makeDistributionPlot(μ)
+
+#logy_pred = 1.0 * chn.value[:,46,1]
 
 
 #%%
 # Un-scale and un-mean-centre:
-#θ_trans = θ .* logStd .+ logMean
-#θ_trans = θ
-#μ_trans = μ .* logStd .+ logMean
-#μ_trans = μ
-#σ_trans = σ .* logStd
-#σ_trans = σ
-#τ_trans = τ .* logStd
-#τ_trans = τ
+θ_trans = θ .* logStd .+ logMean
+μ_0_trans = (μ .+ 0) .* logStd .+ logMean
+# kids only:
+μ_ϕ_trans = (μ .+ ϕ) .* logStd .+ logMean
+
+σ_trans = σ .* logStd
+τ_trans = τ .* logStd
+
 #logy_trans = logy_pred .* logStd .+ logMean
 #logy_trans = logy_pred
+ϕ_trans = ϕ .*  logStd .+ logMean
 
 # Get into non-log space:
-#θ_trans_unLog = exp.(θ_trans .+ 0.5 .* repeat(σ_trans,1,J).^2);
-#μ_trans_unLog = exp.(μ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
-#logy_trans_unLog = exp.(logy_trans);
+θ_trans_unLog = exp.(θ_trans .+ 0.5 .* repeat(σ_trans,1,J).^2);
 
+μ_0_trans_unLog = exp.(μ_0_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
+μ_ϕ_trans_unLog = exp.(μ_ϕ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
+
+# need to transform μ+ϕ together? instead, then subtract the mu
+#ϕ_trans_unLog = exp.(ϕ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
+#ϕ_trans_unLog = μ_ϕ_trans_unLog - μ_0_trans_unLog;
+ϕ_trans_unLog = logStd.*ϕ
+
+
+#τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_0_trans .+ τ_trans.^2))
+τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_ϕ_trans .+ τ_trans.^2))
+#logy_trans_unLog = exp.(logy_trans);
+makeDistributionPlot(μ_trans_unLog)
+makeDistributionPlot(θ_trans_unLog[:,1])
 
 ################################################################################
 ############################# TASKS ############################################
 
-######################## Task A-1 (the Dude)####################################
-# #%% Mode, Mean, HDIs
-# dude = θ_trans_unLog[:,4]
-# ω = mean(find_mode(dude))
-# μ_bar = mean(dude);
-# left,right = hdi(dude);
-#
-# #%% Plotting
-# histogram(dude, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-# dPlot = density!(dude,linewidth=3,label="density estimate")
-# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-# dTopPoint = maximum(dCurve)
-# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-#
+######################## Task 1 ####################################
+makeDistributionPlot(ϕ)
+makeDistributionPlot(ϕ_trans_unLog)
 # Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A1-Dude-Stan.pdf")
-#
-#
-# ######################## Task A-2-a-i (expectation new individual) #############
-# #%% Mode, Mean, HDIs
-# samplePts = μ_trans_unLog
-# ω = mean(find_mode(samplePts))
-# μ_bar = mean(samplePts);
-# left,right = hdi(samplePts);
-#
-# #%% Plotting
-# histogram(samplePts, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-# dPlot = density!(samplePts,linewidth=3,label="density estimate")
-# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-# dTopPoint = maximum(dCurve)
-# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-#
+
+
+# ######################## Task 2 #############
+makeDistributionPlot(τ)
+makeDistributionPlot(τ_trans_unLog)
 # Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Group-Stan.pdf")
 #
 #
