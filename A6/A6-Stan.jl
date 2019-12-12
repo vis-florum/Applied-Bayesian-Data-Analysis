@@ -205,7 +205,7 @@ zlogy = (logy .- logMean) ./ logStd;
 #projDir = dirname(@__FILE__)
 
 # If run from Jupyter/Hydrogen, maybe change to suit you:
-projDir= "/home/johhub/Desktop/ABDA/A6"
+projDir= "/lhome/johhub/Desktop/ABDA/A6"
 #projDir= "/lhome/johhub/Desktop/ABDA/A5"
 tmpDir = projDir*"/tmp"
 
@@ -329,19 +329,6 @@ rc, chn, cnames = stan(myModel,
 #                      E[y] = exp(μ_trans + σ_trans^2 / 2 + τ_trans^2 / 2)
 #                 which is what μ, the group mean, expresses
 
-#%% check the names and positions of the vars (might change with naming)
-chn.value[1,:,1]
-
-#%%
-# Originals
-# indices in chains:
-# 5 = mu
-# 7 = sigma
-# 9 = tau
-# 10 = theta1
-# 43 = theta34
-# 44 = theta_pred
-# 46 = logy_pred
 
 # Access the axis array like this:
 ϕ = 1.0 * chn.value[Axis{:var}("phi")][:]   # all chains in one sausage
@@ -364,83 +351,78 @@ makeDistributionPlot(μ)
 
 #%%
 # Un-scale and un-mean-centre:
-θ_trans = θ .* logStd .+ logMean
-μ_0_trans = (μ .+ 0) .* logStd .+ logMean
+θ_unscaled = θ .* logStd .+ logMean
+μ_0_unscaled = (μ .+ 0) .* logStd .+ logMean
 # kids only:
-μ_ϕ_trans = (μ .+ ϕ) .* logStd .+ logMean
+μ_ϕ_unscaled = (μ .+ ϕ) .* logStd .+ logMean
+ϕ_unscaled = ϕ .* logStd
 
-σ_trans = σ .* logStd
-τ_trans = τ .* logStd
+σ_unscaled = σ .* logStd
+τ_unscaled = τ .* logStd
 
-#logy_trans = logy_pred .* logStd .+ logMean
-#logy_trans = logy_pred
-ϕ_trans = ϕ .*  logStd .+ logMean
 
 # Get into non-log space:
-θ_trans_unLog = exp.(θ_trans .+ 0.5 .* repeat(σ_trans,1,J).^2);
+θ_unscaled_unLog = exp.(θ_unscaled .+ 0.5 .* repeat(σ_unscaled,1,J).^2);
 
-μ_0_trans_unLog = exp.(μ_0_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
-μ_ϕ_trans_unLog = exp.(μ_ϕ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
+μ_0_trans_unLog = exp.(μ_0_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);    # adults
+μ_ϕ_trans_unLog = exp.(μ_0_unscaled .+ ϕ_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);  # kids
 
 # need to transform μ+ϕ together? instead, then subtract the mu
 #ϕ_trans_unLog = exp.(ϕ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
 #ϕ_trans_unLog = μ_ϕ_trans_unLog - μ_0_trans_unLog;
-ϕ_trans_unLog = logStd.*ϕ
+#ϕ_trans_unLog = logStd.*ϕ
 
 
 #τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_0_trans .+ τ_trans.^2))
-τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_ϕ_trans .+ τ_trans.^2))
+#τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_ϕ_trans .+ τ_trans.^2))
 #logy_trans_unLog = exp.(logy_trans);
-makeDistributionPlot(μ_trans_unLog)
-makeDistributionPlot(θ_trans_unLog[:,1])
+makeDistributionPlot(μ_0_trans_unLog)
+makeDistributionPlot(μ_ϕ_trans_unLog)
+#makeDistributionPlot(θ_trans_unLog[:,1])
 
 ################################################################################
 ############################# TASKS ############################################
 
 ######################## Task 1 ####################################
+# Group effects:
 makeDistributionPlot(ϕ)
-makeDistributionPlot(ϕ_trans_unLog)
+makeDistributionPlot(ϕ_unscaled)
+# CORRECT
+# Groups:
+#makeDistributionPlot(μ_0_unscaled)
+#makeDistributionPlot(μ_ϕ_unscaled)
 # Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A1-Dude-Stan.pdf")
 
 
 # ######################## Task 2 #############
 makeDistributionPlot(τ)
-makeDistributionPlot(τ_trans_unLog)
+makeDistributionPlot(τ_unscaled)
+# CORRECT
 # Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Group-Stan.pdf")
-#
-#
-# ########################  Task A-2-a-ii (new individual prediction)  ###########
-# samplePts = logy_trans_unLog
-# ω = mean(find_mode(samplePts))
-# μ_bar = mean(samplePts);
-# med = median(samplePts);
-# left,right = hdi(samplePts);
-#
-# histogram(samplePts, bins=100, normalize=:pdf, label="Simulation", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-# dPlot = density!(samplePts,linewidth=3,label="density estimate")
-# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-# dTopPoint = maximum(dCurve)
-# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-# plot!([(med,0),(med,dTopPoint)], linewidth=3, color="purple", label="median",
-#        annotations = (med, 0, text("$(Int(round(med)))",:purple,:bottom)))
-#
+
+
+# ######################## Task 3, Priors of expected log reaction #############
+# prior for theta was
+# theta[j] ~ normal(mu + phi*ISKID[j],tau)
+X = randn(100000)
+
+prior_kid = mean(μ_0_unscaled) .+ mean(ϕ_unscaled) .+ mean(τ_unscaled) .* X
+prior_adult = mean(μ_0_unscaled) .+ mean(τ_unscaled) .* X
+makeDistributionPlot(prior_kid)
+makeDistributionPlot(prior_adult)
+
 # Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Pred-Stan.pdf")
-#
-#
-# ########################  Task A-2-b (compare to website statistics)  ##########
-# #%% Taken from the homepage:
-# median_web = 273.0
-# mean_web = 284.0
-# println("Δ Median = ",median_web - med)  # using median from previous task
-# println("Δ Mean = ",mean_web - μ_bar)    # using mean from previous task
-#
+
+
+# ######################## Task 4, posterior prediciton #############
+# #### a) knowing that it is a child
+
+# #### b) not knowing that it is a child
+
+
+
+
+
 #
 # ########################  Task A-3 #############################################
 # # Compare hierarchical theta to individual theta using sample means
