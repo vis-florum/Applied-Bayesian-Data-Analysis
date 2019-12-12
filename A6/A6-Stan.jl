@@ -3,6 +3,7 @@ using CmdStan
 using Plots
 using StatsPlots
 using AxisArrays
+using StatsBase
 
 #%% Input Data #################################################################
 y = [607, 583, 521, 494, 369, 782, 570, 678, 467, 620, 425, 395, 346, 361, 310,
@@ -159,27 +160,81 @@ function find_mode(sample_pts;runs=2)
 end
 
 # A function to make the plots with HDIs
-function makeDistributionPlot(X)
+function makeDistributionPlot(X, color="blue")
     #%% Mode, Mean, HDIs
     ω = mean(find_mode(X))
     μ_bar = mean(X);
     left,right = hdi(X);
 
+    h = fit(Histogram, X, nbins=100)
+    w = h.weights      # weights of each bar
+    e = h.edges[1]     # edges of the bars (must be +1 more than bars)
+
+    riemannSum = sum(w.*diff(e))
+    w = w ./ riemannSum
+
+    w_left = w[sum(e .< left)]   # comparison leaves at max left edge of bar that contains the limit
+    w_right = w[sum(e .< right)]
+    w_ω = w[sum(e .< ω)]
+    w_μ = w[sum(e .< μ_bar)]
+
     #%% Plotting
     # specify statsplot?
-    histogram(X, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-    dPlot = density!(X,linewidth=3,label="density estimate")
-    dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-    dTopPoint = maximum(dCurve)
-    plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-           annotations = (left, dTopPoint/2, text("$(round(left,sigdigits=4))",:green,:bottom)))
-    plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-           annotations = (right, dTopPoint/2, text("$(round(right,sigdigits=4))",:green,:bottom)))
-    plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-           annotations = (μ_bar, 0, text("$(round(μ_bar,sigdigits=4))",:blue,:top)))
-    plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-           annotations = (ω, dTopPoint, text("$(round(ω,sigdigits=4))",:red,:bottom)))
 
+    histogram(X, bins=100, normalize=:pdf,
+              color=color, alpha=0.3, linealpha=0.1, legend=false)   # Comes from StatsPlots now
+
+              plot!([(left,0),(left,w_left)],
+                    linewidth=2, color=color, linestyle=:dash,
+                    annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,:bottom)))
+              plot!([(right,0),(right,w_right)],
+                    linewidth=2, color=color, linestyle=:dash,
+                    annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,:bottom)))
+              plot!([(μ_bar,0),(μ_bar,w_μ)],
+                    linewidth=2, color=color, linestyle=:dash,
+                    annotations = (μ_bar, 0.95*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,:top)))
+              plot!([(ω,0),(ω,w_ω)],
+                    linewidth=2, color=color, linestyle=:dashdot,
+                    annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,:bottom)))
+
+end
+
+function makeDistributionPlot!(X, color="blue")
+    #%% Mode, Mean, HDIs
+    ω = mean(find_mode(X))
+    μ_bar = mean(X);
+    left,right = hdi(X);
+
+    h = fit(Histogram, X, nbins=100)
+    w = h.weights      # weights of each bar
+    e = h.edges[1]     # edges of the bars (must be +1 more than bars)
+
+    riemannSum = sum(w.*diff(e))
+    w = w ./ riemannSum
+
+    w_left = w[sum(e .< left)]   # comparison leaves at max left edge of bar that contains the limit
+    w_right = w[sum(e .< right)]
+    w_ω = w[sum(e .< ω)]
+    w_μ = w[sum(e .< μ_bar)]
+
+    #%% Plotting
+    # specify statsplot?
+
+    histogram!(X, bins=100, normalize=:pdf,
+              color=color, alpha=0.3, linealpha=0.1, legend=false)   # Comes from StatsPlots now
+
+    plot!([(left,0),(left,w_left)],
+          linewidth=2, color=color, linestyle=:dash,
+          annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,:bottom)))
+    plot!([(right,0),(right,w_right)],
+          linewidth=2, color=color, linestyle=:dash,
+          annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,:bottom)))
+    plot!([(μ_bar,0),(μ_bar,w_μ)],
+          linewidth=2, color=color, linestyle=:dash,
+          annotations = (μ_bar, 0.95*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,:top)))
+    plot!([(ω,0),(ω,w_ω)],
+          linewidth=2, color=color, linestyle=:dashdot,
+          annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,:bottom)))
 end
 
 #%% Logarithmise and Transform Data ############################################
@@ -282,52 +337,7 @@ rc, chn, cnames = stan(myModel,
 
 
 #%% Transform back (undo mean-centering and scaling and go to non-log space)
-#
-# we assumed mean-centered and scaled log-normal distributions for theta
-# by our "tricks" above, i.e. μ_y, σ_y fixed
-#                    z_logy   ~  Normal(θ, σ^2)
-#       (log(y) - m_y) / σ_y  ~  Normal(θ, σ^2)
-#       (log(y) - m_y) / σ_y  =  θ + σ * x
-# where y is the observation and x the predictor,
-# and x is Normal(0,1), then
-#       log(y) = (θ + σ * x) * σ_y + m_y
-#       log(y) = θ*σ_y + σ*σ_y*x  + m_y
-#       log(y) = θ*σ_y + m_y + σ*σ_y*x
-#
-#  say θ_trans = θ*σ_y + m_y
-#      σ_trans = σ*σ_y
-#
-#       log(y) = θ_trans + σ_trans * x
-#       log(y) ~ Normal(θ_trans, σ_trans^2)
-#           y  = exp(θ_trans + σ_trans * x)
-#           y  ~ LogNormal(θ_trans, σ_trans^2)
-#         E[y] = exp(θ_trans + σ_trans^2 / 2)   # from Wiki
-#        which is what θ, the individual mean, expresses
-#
-# The same is true for the prior distribution yielding θ:
-# (μ and τ are hyperparameters):
-#                         θ ~ Normal(μ_0 + ϕ,τ^2)   # for kids
-#                         θ ~ Normal(μ_0 + 0,τ^2)   # for adults
-#     (θ_trans - m_y) / σ_y = (μ_0 + ϕ[0,1]) + τ * ξ
-#   where ξ ~ Normal(0,1)
-#
-#                   θ_trans = (μ_0 + ϕ[0,1])*σ_y + m_y + τ*σ_y*ξ
-#   say μ_0_trans =  μ_0*σ_y + m_y
-#       μ_ϕ_trans = (μ_0 + ϕ)*σ_y + m_y
-#         τ_trans = τ*σ_y
-#                   θ_trans = μ_trans + τ_trans*ξ
-#                   θ_trans ~ Normal(μ_trans, τ_trans^2)
-#
-#                    log(y) = μ_trans + τ_trans*ξ + σ_trans*x
-# ξ and x are both ~ N(0,1)
-# a sum of two distributions, i.e. here N(0,τ_trans^2) + N(0,σ_trans^2), are a
-# convolution of the two, thus their sum is: N(0,τ_trans^2 + σ_trans^2)
-# assuming independence, and therefore
-#                    log(y) = μ_trans + sqrt(τ_trans^2 + σ_trans^2)*x
-#                    log(y) ~ Normal(μ_trans, (σ_trans^2 + τ_trans^2))
-#                      E[y] = exp(μ_trans + (σ_trans^2 + τ_trans^2) / 2)
-#                      E[y] = exp(μ_trans + σ_trans^2 / 2 + τ_trans^2 / 2)
-#                 which is what μ, the group mean, expresses
+# See derivation in PDF file instead
 
 
 # Access the axis array like this:
@@ -416,60 +426,53 @@ makeDistributionPlot(prior_adult)
 
 # ######################## Task 4, posterior prediciton #############
 # #### a) knowing that it is a child
+N = N*4
+# Predict a reaction time for a single measurement (y)
+zlogy_sim_adult = zeros(N)
+zlogy_sim_kid = zeros(N)
+for i in 1:N
+    # 1) Pick a posterior sample from mu, tau, and sigma
+    idx = Int(ceil(rand()*N))   # choose a random index which will pick from the simulated posterior
+    μ_pick = μ[idx]
+    τ_pick = τ[idx]
+    σ_pick = σ[idx]
+    ϕ_pick = ϕ[idx]
+    # 2) Simulate a new theta given these samples, i.e. theta ~ N(μ,τ)
+    θ_sim_adult  = μ_pick + randn()*τ_pick
+    θ_sim_kid    = μ_pick + ϕ_pick + randn()*τ_pick
+    # 3) Simulate a reaction time measurement (y) given the picked theta and sigma, i.e. zlogy ~ N(θ,σ)
+    zlogy_sim_adult[i] = θ_sim_adult + randn()*σ_pick
+    zlogy_sim_kid[i]   = θ_sim_kid   + randn()*σ_pick
+end
+
+# 4) Calculate y from zlogy (undo mean-centering and scaling, and go to non-log space)
+y_sim_adult = exp.(zlogy_sim_adult .* logStd .+ logMean)
+y_sim_kid   = exp.(zlogy_sim_kid   .* logStd .+ logMean)
+
+makeDistributionPlot(y_sim_adult)
+makeDistributionPlot!(y_sim_kid)
+# CORRECT
+
 
 # #### b) not knowing that it is a child
+using Random
+using Distributions
+nr_kids = sum(child_j)
+
+# assuming a prior of equally likely to be adult or child, then
+# the posterior probability of having the amount of childs among
+# our total individuals is given by a bernoulli process that sampled
+# these amounts of kids from a total amoun. THis is the beta distribution with
+# prior parameters a=b=1, N = # of individuals, z = # of kids
+
+a = nr_kids + 1 # head (kid) count here
+b = J - nr_kids + 1 # non-heads (adults)
+postBeingKid = rand(Beta(a,b),N)
+areKids = postBeingKid .>= rand(N)
 
 
-
-
-
-#
-# ########################  Task A-3 #############################################
-# # Compare hierarchical theta to individual theta using sample means
-#
-# #%% Logarithmic sample means
-# θ_means_log = zeros(J)
-# for j in 1:J
-#     θ_means_log[j] = mean(logy[ind .== j])
-# end
-#
-# #%% Plot into one figure
-# # Get ordered indices:
-# sortIdx = sortperm(θ_means_log)
-# # Limits for the figure
-# myXlims = (minimum(θ_trans),maximum(θ_trans))
-# # Initialise the subplots
-# StatsPlots.plot(layout=(J, 1),size = (1000, 1500))
-# # Plot each theta:
-# for i in 1:(J-1)
-#     j = sortIdx[i]
-#     # Sampled thetas and their mean:
-#     histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
-#             ann=(myXlims[1]+.05,4,"ind $j:"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims)
-#     vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=i, legend=false)
-#
-#     # The (log) sample means of the initial data:
-#     vline!([θ_means_log[j]],linewidth=3, color="red", subplot=i, legend=false)
-# end
-#
-# # The last one separately so I can see it in Hydrogen:
-# j = sortIdx[J]
-# histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
-#             ann=(myXlims[1]+.05,10,"ind $J:"),ticks=nothing, yaxis=false, subplot=J, xlims=myXlims)
-# vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=J, legend=false)
-# vline!([θ_means_log[j]],linewidth=3, color="red", subplot=J, legend=false)
-#
-# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-All.pdf")
-#
-#
-# # --------------- Old Code (please ignore) -------------------------
-# # Get a color map:
-# #curColor = get_color_palette(:auto, plot_color(:white), J)
-# #for n = 1:Int(ceil(J/5))
-# #    plot()
-# #    for j in ((n-1)*5+1):min((n*5),J)
-# #        histogram!(θ_trans[:,j], bins=100, normalize=:pdf,legend=false,alpha=0.2, linealpha=0.0, color=curColor[j])
-# #        vline!([θ_means_log[j]], linewidth=3, color=curColor[j])
-# #    end
-# #    Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Stan-$n.pdf")
-# #end
+# Vectorised
+idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
+zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
+makeDistributionPlot(y_sim_unknown)
