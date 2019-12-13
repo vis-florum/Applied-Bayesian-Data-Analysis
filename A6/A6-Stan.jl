@@ -4,6 +4,8 @@ using Plots
 using StatsPlots
 using AxisArrays
 using StatsBase
+using Random
+using Distributions
 
 #%% Input Data #################################################################
 y = [607, 583, 521, 494, 369, 782, 570, 678, 467, 620, 425, 395, 346, 361, 310,
@@ -159,8 +161,11 @@ function find_mode(sample_pts;runs=2)
     return ci
 end
 
+
+
+
 # A function to make the plots with HDIs
-function makeDistributionPlot(X, color="blue")
+function makeDistributionPlot(X, color="blue", annotating=true)
     #%% Mode, Mean, HDIs
     ω = mean(find_mode(X))
     μ_bar = mean(X);
@@ -182,24 +187,35 @@ function makeDistributionPlot(X, color="blue")
     # specify statsplot?
 
     histogram(X, bins=100, normalize=:pdf,
-              color=color, alpha=0.3, linealpha=0.1, legend=false)   # Comes from StatsPlots now
+              color=color, alpha=0.4, linealpha=0.1, legend=false)   # Comes from StatsPlots now
 
-              plot!([(left,0),(left,w_left)],
-                    linewidth=2, color=color, linestyle=:dash,
-                    annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,:bottom)))
-              plot!([(right,0),(right,w_right)],
-                    linewidth=2, color=color, linestyle=:dash,
-                    annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,:bottom)))
-              plot!([(μ_bar,0),(μ_bar,w_μ)],
-                    linewidth=2, color=color, linestyle=:dash,
-                    annotations = (μ_bar, 0.95*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,:top)))
-              plot!([(ω,0),(ω,w_ω)],
-                    linewidth=2, color=color, linestyle=:dashdot,
-                    annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,:bottom)))
-
+    if annotating
+    plot!([(left,0),(left,w_left)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,rotation=90,:center,:left)))
+    plot!([(right,0),(right,w_right)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,rotation=90,:center,:left)))
+    plot!([(μ_bar,0),(μ_bar,w_μ)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (μ_bar, 0.5*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,rotation=90,:bottom,:right)))
+    plot!([(ω,0),(ω,w_ω)],
+        linewidth=1.5, color=color, linestyle=:dashdot,
+        annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,rotation=90,:bottom,:right)))
+    else
+    plot!([(left,0),(left,w_left)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(right,0),(right,w_right)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(μ_bar,0),(μ_bar,w_μ)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(ω,0),(ω,w_ω)],
+        linewidth=1.5, color=color, linestyle=:dashdot)
+    end
 end
 
-function makeDistributionPlot!(X, color="blue")
+
+function makeDistributionPlot!(X, color="blue",annotating=true)
     #%% Mode, Mean, HDIs
     ω = mean(find_mode(X))
     μ_bar = mean(X);
@@ -223,18 +239,29 @@ function makeDistributionPlot!(X, color="blue")
     histogram!(X, bins=100, normalize=:pdf,
               color=color, alpha=0.3, linealpha=0.1, legend=false)   # Comes from StatsPlots now
 
-    plot!([(left,0),(left,w_left)],
-          linewidth=2, color=color, linestyle=:dash,
-          annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,:bottom)))
-    plot!([(right,0),(right,w_right)],
-          linewidth=2, color=color, linestyle=:dash,
-          annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,:bottom)))
-    plot!([(μ_bar,0),(μ_bar,w_μ)],
-          linewidth=2, color=color, linestyle=:dash,
-          annotations = (μ_bar, 0.95*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,:top)))
-    plot!([(ω,0),(ω,w_ω)],
-          linewidth=2, color=color, linestyle=:dashdot,
-          annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,:bottom)))
+  if annotating
+  plot!([(left,0),(left,w_left)],
+      linewidth=1.5, color=color, linestyle=:dash,
+      annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,rotation=90,:center,:left)))
+  plot!([(right,0),(right,w_right)],
+      linewidth=1.5, color=color, linestyle=:dash,
+      annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,rotation=90,:center,:left)))
+  plot!([(μ_bar,0),(μ_bar,w_μ)],
+      linewidth=1.5, color=color, linestyle=:dash,
+      annotations = (μ_bar, 0.5*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,rotation=90,:bottom,:right)))
+  plot!([(ω,0),(ω,w_ω)],
+      linewidth=1.5, color=color, linestyle=:dashdot,
+      annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,rotation=90,:bottom,:right)))
+  else
+  plot!([(left,0),(left,w_left)],
+      linewidth=1.5, color=color, linestyle=:dash)
+  plot!([(right,0),(right,w_right)],
+      linewidth=1.5, color=color, linestyle=:dash)
+  plot!([(μ_bar,0),(μ_bar,w_μ)],
+      linewidth=1.5, color=color, linestyle=:dash)
+  plot!([(ω,0),(ω,w_ω)],
+      linewidth=1.5, color=color, linestyle=:dashdot)
+  end
 end
 
 #%% Logarithmise and Transform Data ############################################
@@ -265,10 +292,10 @@ projDir= "/lhome/johhub/Desktop/ABDA/A6"
 tmpDir = projDir*"/tmp"
 
 noOfChains = 4
-N = 10^5 / noOfChains   # more than 10^6 samples make the histograms thin
-N = convert(Int64, N)
+N = 10^5                # total number of samples
+N_chain = convert(Int64, 10^5 / noOfChains)   # samples per chain
 keepchains = false
-burnIn = 10^4
+burnIn = 10^4           # burni-in per chain
 
 modelString = "
 data {
@@ -315,10 +342,10 @@ observedData = Dict("I" => I,
 
 ### 3) Chain specs
 myModel = Stanmodel(
-                Sample(save_warmup=false,
-                       num_warmup=burnIn,
-                       num_samples=N,
-                       thin=1),   # thin: Period between saved samples
+                Sample(save_warmup = false,
+                       num_warmup = burnIn,
+                       num_samples = N_chain,
+                       thin = 1),   # thin: Period between saved samples
                 name = "reactionTime-A6",
                 model = modelString,
                 printsummary = false,
@@ -342,7 +369,7 @@ rc, chn, cnames = stan(myModel,
 
 # Access the axis array like this:
 ϕ = 1.0 * chn.value[Axis{:var}("phi")][:]   # all chains in one sausage
-θ = Array{Float64,2}(undef,N*noOfChains,J)
+θ = Array{Float64,2}(undef,N,J)
 for j in 1:J
     θ[:,j] = 1.0 * chn.value[Axis{:var}("theta.$j")][:]   # all chains in one sausage
 end
@@ -426,53 +453,62 @@ makeDistributionPlot(prior_adult)
 
 # ######################## Task 4, posterior prediciton #############
 # #### a) knowing that it is a child
-N = N*4
+
 # Predict a reaction time for a single measurement (y)
-zlogy_sim_adult = zeros(N)
-zlogy_sim_kid = zeros(N)
-for i in 1:N
-    # 1) Pick a posterior sample from mu, tau, and sigma
-    idx = Int(ceil(rand()*N))   # choose a random index which will pick from the simulated posterior
-    μ_pick = μ[idx]
-    τ_pick = τ[idx]
-    σ_pick = σ[idx]
-    ϕ_pick = ϕ[idx]
-    # 2) Simulate a new theta given these samples, i.e. theta ~ N(μ,τ)
-    θ_sim_adult  = μ_pick + randn()*τ_pick
-    θ_sim_kid    = μ_pick + ϕ_pick + randn()*τ_pick
-    # 3) Simulate a reaction time measurement (y) given the picked theta and sigma, i.e. zlogy ~ N(θ,σ)
-    zlogy_sim_adult[i] = θ_sim_adult + randn()*σ_pick
-    zlogy_sim_kid[i]   = θ_sim_kid   + randn()*σ_pick
-end
-
-# 4) Calculate y from zlogy (undo mean-centering and scaling, and go to non-log space)
+idx = Int.(ceil.(rand(N).*N))   # choose random indices which will pick from the simulated posterior
+# Sample zlogy according to the model:
+zlogy_sim_adult = μ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+zlogy_sim_kid = μ[idx] .+ ϕ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+# Transform to non-standardised and non-log:
 y_sim_adult = exp.(zlogy_sim_adult .* logStd .+ logMean)
-y_sim_kid   = exp.(zlogy_sim_kid   .* logStd .+ logMean)
+y_sim_kid = exp.(zlogy_sim_kid .* logStd .+ logMean)
 
-makeDistributionPlot(y_sim_adult)
-makeDistributionPlot!(y_sim_kid)
-# CORRECT
+makeDistributionPlot(y_sim_adult,"black",true)
+makeDistributionPlot!(y_sim_kid,"red",true)
+Plots.savefig("/lhome/johhub/Desktop/ABDA/A6/figs/PP_known_Stan.pdf")
 
 
+##############
 # #### b) not knowing that it is a child
-using Random
-using Distributions
-nr_kids = sum(child_j)
-
 # assuming a prior of equally likely to be adult or child, then
 # the posterior probability of having the amount of childs among
 # our total individuals is given by a bernoulli process that sampled
 # these amounts of kids from a total amoun. THis is the beta distribution with
 # prior parameters a=b=1, N = # of individuals, z = # of kids
 
-a = nr_kids + 1 # head (kid) count here
-b = J - nr_kids + 1 # non-heads (adults)
+nr_kids = sum(child_j)  # number of heads
+a = nr_kids + 1         # head (kid) count here
+b = J - nr_kids + 1     # non-heads (adults)
 postBeingKid = rand(Beta(a,b),N)
 areKids = postBeingKid .>= rand(N)
 
-
-# Vectorised
+# Posterior predictive sampling
 idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
 zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
 y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
-makeDistributionPlot(y_sim_unknown)
+makeDistributionPlot!(y_sim_unknown,"black")
+
+
+
+# #### b-Version 2) not knowing that it is a child, set a fixed fraction
+cur_colors = get_color_palette(:auto, plot_color(:white), 11)
+# Limits for the figure
+myXlims = (100,1000)
+myYlims = (0,0.006)
+# Initialise the subplots
+plt = StatsPlots.plot(layout=(11, 1),size = (800, 1600))
+# Try various fixed ratios:
+for (i, weight) in enumerate(0:.1:1)
+    postBeingKid = weight
+    areKids = postBeingKid .>= rand(N)
+    idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
+    zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+    y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
+
+    histogram!(y_sim_unknown, bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.3,
+            ann=(myXlims[2]-200,.003,"Kids: $(weight*100) %"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims, ylims=myYlims, color=cur_colors[i])
+    vline!([mean(y_sim_unknown)],linewidth=3, color="black", subplot=i, legend=false, linestyle=:dash)
+end
+# Show plot
+plt
+Plots.savefig("/lhome/johhub/Desktop/ABDA/A6/figs/CompMixture.pdf")
