@@ -550,7 +550,7 @@ for (i, weight) in enumerate(0:.1:1)
     #histogram!(y_sim_unknown, bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.3,
     #        ann=(myXlims[2]-200,.003,"Kids: $(weight*100) %"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims, ylims=myYlims, color=cur_colors[i])
     #vline!([mean(y_sim_unknown)],linewidth=3, color="black", subplot=i, legend=false, linestyle=:dash)
-    plot!(ann=(myXlims[2]-200,i*0.006+0.003,"Kids: $(weight*100) %"),grid=false,ticks=false)
+    plot!(ann=(myXlims[2]-200,i*0.006+0.003,"Kids: $(weight*100) %"),grid=false,yticks=false)
 end
 # Show plot
 plt
