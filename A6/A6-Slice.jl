@@ -681,8 +681,8 @@ Plots.savefig(projDir*"/figs/priors_postOverlay_Slice.pdf")
 # Posterior predictive sampling:
 idx = Int.(ceil.(rand(N).*N))   # choose random indices which will pick from the simulated posterior
 # Sample zlogy according to the model:
-zlogy_sim_adult = μ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
-zlogy_sim_kid = μ[idx] .+ ϕ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+zlogy_sim_adult = μ_0[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+zlogy_sim_kid = μ_0[idx] .+ ϕ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
 # Transform to non-standardised and non-log:
 y_sim_adult = exp.(zlogy_sim_adult .* logStd .+ logMean)
 y_sim_kid = exp.(zlogy_sim_kid .* logStd .+ logMean)
@@ -708,7 +708,7 @@ areKids = postBeingKid .>= rand(N)  # only those who make it over the threshold
 
 # Posterior predictive sampling
 idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
-zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+zlogy_sim_unknown = μ_0[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
 y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
 # Compare in plots:
 makeDistributionPlot(y_sim_unknown,"blue",ann=true)
@@ -724,7 +724,7 @@ weight = 0.5
 postBeingKid = weight
 areKids = postBeingKid .>= rand(N)
 idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
-zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+zlogy_sim_unknown = μ_0[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
 y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
 makeDistributionPlot(y_sim_unknown,"blue",ann=true)
 histogram!(y_sim_adult, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="black")
@@ -746,7 +746,7 @@ for (i, weight) in enumerate(0:.1:1)
     postBeingKid = weight
     areKids = postBeingKid .>= rand(N)
     idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
-    zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+    zlogy_sim_unknown = μ_0[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
     y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
 
     makeDistributionPlot!(y_sim_unknown,"blue",ann=false,offset=(i-1)*0.006,scale=1.0)
