@@ -73,6 +73,7 @@ child_i = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 
+#####
 #%% Functions ##################################################################
 ## Jespers HDI:
 function hdi(theta_samp,alpha=0.05)
@@ -168,8 +169,6 @@ function find_mode(sample_pts;runs=2)
 
     return ci
 end
-
-
 
 
 # A function to make the plots with HDIs
@@ -446,7 +445,7 @@ makeDistributionPlot(τ,"blue")
 Plots.savefig(projDir*"/figs/tau_Stan.pdf")
 
 makeDistributionPlot(τ_unscaled, "blue")
-Plots.savefig(projDir*"/figs/tau_unscaled.pdf")
+Plots.savefig(projDir*"/figs/tau_unscaled_Stan.pdf")
 
 
 ######################## Task 3, Priors of expected log reaction #############
@@ -550,9 +549,9 @@ Plots.savefig(projDir*"/figs/PP_unknown_fixed05_Stan.pdf")
 # Limits for the figure
 myXlims = (50,1200)
 #myYlims = (0,0.006)
-# Initialise the subplots
+
 plt = StatsPlots.plot(size = (800, 1600),xlims=myXlims)
-#plt = plot()
+
 # Try various fixed ratios:
 for (i, weight) in enumerate(0:.1:1)
     postBeingKid = weight
@@ -564,12 +563,9 @@ for (i, weight) in enumerate(0:.1:1)
     makeDistributionPlot!(y_sim_unknown,"blue",ann=false,offset=(i-1)*0.006,scale=1.0)
     makeDistributionPlot!(y_sim_adult,"black",ann=false,offset=(i-1)*0.006,scale=1.0)
     makeDistributionPlot!(y_sim_kid,"red",ann=false,offset=(i-1)*0.006,scale=1.0)
-    #histogram!(y_sim_unknown, bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.3,
-    #        ann=(myXlims[2]-200,.003,"Kids: $(weight*100) %"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims, ylims=myYlims, color=cur_colors[i])
-    #vline!([mean(y_sim_unknown)],linewidth=3, color="black", subplot=i, legend=false, linestyle=:dash)
     plot!(ann=(myXlims[2]-200,(i-1)*0.006+0.003,"Kids: $(weight*100) %"),grid=false,yticks=false)
 end
 # Show plot
 plt
-#plot!(xlims=myXlims)
+
 Plots.savefig(projDir*"/figs/CompMixture_Stan.pdf")
