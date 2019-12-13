@@ -1,4 +1,3 @@
-#using Revise
 using CmdStan
 using Plots
 using StatsPlots
@@ -7,6 +6,15 @@ using StatsBase
 using Random
 using Distributions
 
+##### Some local setups
+# If run from command line externally:
+#projDir = dirname(@__FILE__)
+
+# If run from Jupyter/Hydrogen, maybe change to suit you:
+projDir= "/lhome/johhub/Desktop/ABDA/A6"
+tmpDir = projDir*"/tmp"
+
+#####
 #%% Input Data #################################################################
 y = [607, 583, 521, 494, 369, 782, 570, 678, 467, 620, 425, 395, 346, 361, 310,
 300, 382, 294, 315, 323, 421, 339, 398, 328, 335, 291, 329, 310, 294, 321, 286,
@@ -282,15 +290,6 @@ zlogy = (logy .- logMean) ./ logStd;
 ############################# STANS MCMC #######################################
 
 #%% Stan Setup #################################################################
-
-# If run from command line externally:
-#projDir = dirname(@__FILE__)
-
-# If run from Jupyter/Hydrogen, maybe change to suit you:
-projDir= "/lhome/johhub/Desktop/ABDA/A6"
-#projDir= "/lhome/johhub/Desktop/ABDA/A5"
-tmpDir = projDir*"/tmp"
-
 noOfChains = 4
 N = 10^5                # total number of samples
 N_chain = convert(Int64, 10^5 / noOfChains)   # samples per chain
@@ -363,27 +362,19 @@ rc, chn, cnames = stan(myModel,
                        CmdStanDir = CMDSTAN_HOME);
 
 
+##############
 #%% Transform back (undo mean-centering and scaling and go to non-log space)
 # See derivation in PDF file instead
 
-
-# Access the axis array like this:
+# Access the axis array by names:
 ϕ = 1.0 * chn.value[Axis{:var}("phi")][:]   # all chains in one sausage
 θ = Array{Float64,2}(undef,N,J)
 for j in 1:J
-    θ[:,j] = 1.0 * chn.value[Axis{:var}("theta.$j")][:]   # all chains in one sausage
+    θ[:,j] = 1.0 * chn.value[Axis{:var}("theta.$j")][:]
 end
 μ = 1.0 * chn.value[Axis{:var}("mu")][:]
 σ = 1.0 * chn.value[Axis{:var}("sigma")][:]
 τ = 1.0 * chn.value[Axis{:var}("tau")][:]
-
-makeDistributionPlot(ϕ)
-
-Plots.savefig("/home/johhub/Desktop/ABDA/A6/test-Stan.pdf")
-
-makeDistributionPlot(μ)
-
-#logy_pred = 1.0 * chn.value[:,46,1]
 
 
 #%%
@@ -413,9 +404,6 @@ makeDistributionPlot(μ)
 #τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_0_trans .+ τ_trans.^2))
 #τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_ϕ_trans .+ τ_trans.^2))
 #logy_trans_unLog = exp.(logy_trans);
-makeDistributionPlot(μ_0_trans_unLog)
-makeDistributionPlot(μ_ϕ_trans_unLog)
-#makeDistributionPlot(θ_trans_unLog[:,1])
 
 ################################################################################
 ############################# TASKS ############################################
@@ -424,21 +412,22 @@ makeDistributionPlot(μ_ϕ_trans_unLog)
 # Group effects:
 makeDistributionPlot(ϕ)
 makeDistributionPlot(ϕ_unscaled)
-# CORRECT
+
 # Groups:
 #makeDistributionPlot(μ_0_unscaled)
 #makeDistributionPlot(μ_ϕ_unscaled)
-# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A1-Dude-Stan.pdf")
+
+#Plots.savefig(projDir*"/A6/figs/CompMixture_Stan.pdf")
 
 
-# ######################## Task 2 #############
+######################## Task 2 #############
 makeDistributionPlot(τ)
 makeDistributionPlot(τ_unscaled)
-# CORRECT
-# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Group-Stan.pdf")
+
+#Plots.savefig(projDir*"/A6/figs/CompMixture_Stan.pdf")
 
 
-# ######################## Task 3, Priors of expected log reaction #############
+######################## Task 3, Priors of expected log reaction #############
 # prior for theta was
 # theta[j] ~ normal(mu + phi*ISKID[j],tau)
 X = randn(100000)
@@ -448,13 +437,13 @@ prior_adult = mean(μ_0_unscaled) .+ mean(τ_unscaled) .* X
 makeDistributionPlot(prior_kid)
 makeDistributionPlot(prior_adult)
 
-# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Pred-Stan.pdf")
+#Plots.savefig(projDir*"/A6/figs/CompMixture_Stan.pdf")
 
 
-# ######################## Task 4, posterior prediciton #############
-# #### a) knowing that it is a child
+######################## Task 4, posterior prediciton #############
+#### a) knowing that it is a child
 
-# Predict a reaction time for a single measurement (y)
+# Posterior predictive sampling:
 idx = Int.(ceil.(rand(N).*N))   # choose random indices which will pick from the simulated posterior
 # Sample zlogy according to the model:
 zlogy_sim_adult = μ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
@@ -465,32 +454,36 @@ y_sim_kid = exp.(zlogy_sim_kid .* logStd .+ logMean)
 
 makeDistributionPlot(y_sim_adult,"black",true)
 makeDistributionPlot!(y_sim_kid,"red",true)
-Plots.savefig("/lhome/johhub/Desktop/ABDA/A6/figs/PP_known_Stan.pdf")
-
+Plots.savefig(projDir*"/figs/PP_known_Stan.pdf")
 
 ##############
-# #### b) not knowing that it is a child
-# assuming a prior of equally likely to be adult or child, then
+#### b) not knowing that it is a child
+# assuming a prior of equally likely to be adult or child (beta(1,1))
+# then add a likelihood corresponding to a bernoulli processs, with number of
+# heads equvivalent to number of kids among all individuals
 # the posterior probability of having the amount of childs among
-# our total individuals is given by a bernoulli process that sampled
-# these amounts of kids from a total amoun. THis is the beta distribution with
-# prior parameters a=b=1, N = # of individuals, z = # of kids
+# our total individuals is given by a bernoulli process with a beta
+# with parameters a=b=1, N = # of individuals, z = # of kids
 
 nr_kids = sum(child_j)  # number of heads
 a = nr_kids + 1         # head (kid) count here
 b = J - nr_kids + 1     # non-heads (adults)
 postBeingKid = rand(Beta(a,b),N)
-areKids = postBeingKid .>= rand(N)
+areKids = postBeingKid .>= rand(N)  # only those who make it over the threshold
 
 # Posterior predictive sampling
 idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
 zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
 y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
-makeDistributionPlot!(y_sim_unknown,"black")
+# Compare in plots:
+makeDistributionPlot(y_sim_unknown,"blue",true)
+histogram!(y_sim_adult, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="black")
+histogram!(y_sim_kid, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="red")
+Plots.savefig(projDir*"/figs/PP_unknown_Stan.pdf")
 
 
-
-# #### b-Version 2) not knowing that it is a child, set a fixed fraction
+##############
+#### b-Version 2) not knowing that it is a child, set a fixed fraction
 cur_colors = get_color_palette(:auto, plot_color(:white), 11)
 # Limits for the figure
 myXlims = (100,1000)
@@ -511,4 +504,4 @@ for (i, weight) in enumerate(0:.1:1)
 end
 # Show plot
 plt
-Plots.savefig("/lhome/johhub/Desktop/ABDA/A6/figs/CompMixture.pdf")
+Plots.savefig(projDir*"/A6/figs/CompMixture_Stan.pdf")
