@@ -70,6 +70,7 @@ using SharedArrays
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 
+#####
 #%% Functions ##################################################################
 # @everywhere to make them known to all workers
 @everywhere function mySliceSampler(pdf_log, x_0, w, m, N = 2000, burnIn = 1000)
@@ -272,7 +273,182 @@ end
 end
 
 
-### Priors, Likelihoods, Posteriors
+# A function to make the plots with HDIs
+function makeDistributionPlot(X, color="blue"; ann=true, offset=0.0, scale=1.0)
+    #%% Mode, Mean, HDIs
+    ω = mean(find_mode(X))
+    μ_bar = mean(X);
+    left,right = hdi(X);
+
+    h = fit(Histogram, X, nbins=100)
+    w = h.weights      # weights of each bar
+    e = h.edges[1]     # edges of the bars (must be +1 more than bars)
+
+    riemannSum = sum(w.*diff(e))
+    w = w ./ riemannSum
+
+    e2 = similar([e[:]; e[:]])  # doubling of the edge vector
+    e2[2:2:end] = e             # even indices
+    e2[1:2:end] = e             # odd indices
+    e2 = e2[2:(end-1)]          # pop the ends
+
+    w2 = similar([w[:]; w[:]])  # doubling of the weight vector
+    w2[2:2:end] = w             # even indices
+    w2[1:2:end] = w             # odd indices
+    w2 = w2 .* scale .+ offset
+
+    w_left = w[sum(e .< left)] * scale + offset  # comparison leaves at max left edge of bar that contains the limit
+    w_right = w[sum(e .< right)] * scale + offset
+    w_ω = w[sum(e .< ω)] * scale + offset
+    w_μ = w[sum(e .< μ_bar)] * scale + offset
+
+    #%% Plotting
+    plot(e2, w2,
+         linealpha=0.1, linecolor=color,
+         fillrange=offset, fillalpha=0.4, fillcolor=color,
+         legend=false)
+
+    # or do it by histogram, then we also have vertical lines
+    # specify statsplot?
+    #histogram(X, bins=100, normalize=:pdf,
+    #          color=color, alpha=0.4, linealpha=0.1, legend=false)   # Comes from StatsPlots now
+
+    if ann
+    plot!([(left,offset),(left,w_left)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,rotation=90,:center,:left)))
+    plot!([(right,offset),(right,w_right)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,rotation=90,:center,:left)))
+    plot!([(μ_bar,offset),(μ_bar,w_μ)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (μ_bar, 0.5*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,rotation=90,:bottom,:right)))
+    plot!([(ω,offset),(ω,w_ω)],
+        linewidth=1.5, color=color, linestyle=:dashdot,
+        annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,rotation=90,:bottom,:right)))
+    else
+    plot!([(left,offset),(left,w_left)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(right,offset),(right,w_right)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(μ_bar,offset),(μ_bar,w_μ)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(ω,offset),(ω,w_ω)],
+        linewidth=1.5, color=color, linestyle=:dashdot)
+    end
+end
+
+
+function makeDistributionPlot!(X, color="blue"; ann=true, offset=0.0, scale=1.0)
+    #%% Mode, Mean, HDIs
+    ω = mean(find_mode(X))
+    μ_bar = mean(X);
+    left,right = hdi(X);
+
+    h = fit(Histogram, X, nbins=100)
+    w = h.weights      # weights of each bar
+    e = h.edges[1]     # edges of the bars (must be +1 more than bars)
+
+    riemannSum = sum(w.*diff(e))
+    w = w ./ riemannSum
+
+    e2 = similar([e[:]; e[:]])  # doubling of the edge vector
+    e2[2:2:end] = e             # even indices
+    e2[1:2:end] = e             # odd indices
+    e2 = e2[2:(end-1)]          # pop the ends
+
+    w2 = similar([w[:]; w[:]])  # doubling of the weight vector
+    w2[2:2:end] = w             # even indices
+    w2[1:2:end] = w             # odd indices
+    w2 = w2 .* scale .+ offset
+
+    w_left = w[sum(e .< left)] * scale + offset  # comparison leaves at max left edge of bar that contains the limit
+    w_right = w[sum(e .< right)] * scale + offset
+    w_ω = w[sum(e .< ω)] * scale + offset
+    w_μ = w[sum(e .< μ_bar)] * scale + offset
+
+    #%% Plotting
+    plot!(e2, w2,
+         linealpha=0.1, linecolor=color,
+         fillrange=offset, fillalpha=0.4, fillcolor=color,
+         legend=false)
+
+    # or do it by histogram, then we also have vertical lines
+    # specify statsplot?
+    #histogram!(X, bins=100, normalize=:pdf,
+    #          color=color, alpha=0.4, linealpha=0.1, legend=false)   # Comes from StatsPlots now
+
+    if ann
+    plot!([(left,offset),(left,w_left)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,rotation=90,:center,:left)))
+    plot!([(right,offset),(right,w_right)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,rotation=90,:center,:left)))
+    plot!([(μ_bar,offset),(μ_bar,w_μ)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (μ_bar, 0.5*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,rotation=90,:bottom,:right)))
+    plot!([(ω,offset),(ω,w_ω)],
+        linewidth=1.5, color=color, linestyle=:dashdot,
+        annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,rotation=90,:bottom,:right)))
+    else
+    plot!([(left,offset),(left,w_left)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(right,offset),(right,w_right)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(μ_bar,offset),(μ_bar,w_μ)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(ω,offset),(ω,w_ω)],
+        linewidth=1.5, color=color, linestyle=:dashdot)
+    end
+end
+
+# Taken from Jesper:
+# https://en.wikipedia.org/wiki/Correlation_coefficient
+function ACF(x, k=1)
+  x_meanshift = x .- mean(x)
+  zxk = x_meanshift[k+1:end]
+  zyk = x_meanshift[1:end-k]
+  return sum(zxk.*zyk)/sqrt(sum(zxk.^2)*sum(zyk.^2))
+end
+
+# Taken from Jesper:
+function acovlim(x;lim=0.05)
+  k = 0
+  rhos = []
+  rho = 1
+  while rho>lim
+    rho = ACF(x,k)
+    push!(rhos,rho)
+    k += 1
+  end
+  return rhos
+end
+
+# Taken from Jesper:
+# ess -- effective sample size (Kruschke 2014, page 184)
+function ess(x)
+    if typeof(x)==Vector{Float64}
+        n = length(x)
+        acf = acovlim(x)
+        return n/(1+2*sum(acf[2:end]))
+    else
+        m,n = size(x)
+        list = zeros(m)
+        for i in 1:m
+            acf = acovlim(x[i,:])
+            list[i] = n/(1+2*sum(acf[2:end]))
+        end
+        return list
+    end
+end
+
+
+################################################################################
+
+#####
+#%% Priors, Likelihoods, Posteriors ############################################
+#####
 @everywhere function log_prior_flat(X::Float64)
     return 0.0  # or any other constant value, for the posterior it doesn't matter
 end
@@ -289,52 +465,30 @@ end
 end
 
 
-"""
-    log_normal(Y[Array], mean, stDev)
-
-Return the joint `pdf` of an array of Data points, i.e. the sum in log-space.
-
-# Input:
-Y    = data points
-mean = mean value
-stD  = standard deviation (σ)
-
-# Output:
-joint normal pdf in log space
-
-# Examples
-```julia-repl
-julia> log_normal([1.0, 2.0], 0.0, 1.0)
--2.5
-```
-"""
-
-@everywhere function log_normal(Y::Array{Float64},mean::Float64,stDev::Float64)
+# Here we have to
+# accomodate, that the means no longer are a constant, but an array, i.e. a
+# a mean for each theta
+@everywhere function log_prior_theta(θ::Array{Float64},μ::Array{Float64},σ::Float64)
+    # Log-normal distribution
     # Logarithmise the normal pdfs in series:
     # We can leave out the 1/sqrt(2π) since it does not change sampling from the posterior
-    return sum(-log(stDev) .- 0.5 .* ((Y .- mean) ./ stDev).^2)
+    return sum(-log(σ) .- 0.5 .* ((θ .- μ) ./ σ).^2)
 end
 
-
-
-@everywhere function log_lklhd_fct(jointParams::Array{Float64},Y::Array{Float64,1},ind::Array{Int64,1},child_j::Array{Int64,1})
+@everywhere function log_lklhd_fct(jointParams::Array{Float64},zlogy::Array{Float64,1},ind::Array{Int64,1})
     # return the joint lklhd of the given input data
-    # cannot sample θ any longer, since its mean shifts for each individual, now sample ζ
     J = length(jointParams) - 4
-    ζ = jointParams[1:J]
-    ϕ_0, σ, τ, ϕ_1  = jointParams[(J+1):end]
-
-    μ = ϕ_0 .+ ϕ_1 .* child_j*1.0    # current sampled μ for each individual
-    θ = μ .+ ζ .* τ                  # current sampled θ for each individual (normal around μ with std τ)
-                                    # therefore ζ must be ~ normal(0,1)
+    θ = jointParams[1:J]
+    μ_0, σ, τ, ϕ  = jointParams[(J+1):end]
 
     jointLklhd = 0.0
 
     if (σ > 0)
         # Logarithmise the normal pdfs in series:
         # summing up:
-        for i in 1:length(Y)
-            jointLklhd += -log(σ) - 0.5 * ((Y[i] - θ[ind[i]]) / σ)^2
+        # note, that we go through each observation, vectorising is hard:
+        for i in 1:length(zlogy)
+            jointLklhd += -log(σ) - 0.5 * ((zlogy[i] - θ[ind[i]]) / σ)^2
         end
     else
         jointLklhd = -Inf
@@ -344,21 +498,18 @@ end
 end
 
 
-@everywhere function log_priors(jointParams::Array{Float64})
+@everywhere function log_priors(jointParams::Array{Float64},K_j::Array{Int64,1})
     # The joint log-pdf of all the priors in the model
-    # cannot sample θ any longer, since its mean shifts for each individual, now sample ζ
     J = length(jointParams) - 4
-    ζ = jointParams[1:J]
-    ϕ_0, σ, τ, ϕ_1  = jointParams[(J+1):end]
+    θ = jointParams[1:J]
+    μ_0, σ, τ, ϕ  = jointParams[(J+1):end]
 
-    #μ = ϕ_0 .+ ϕ_1 * child_i    # current sampled μ for each individual
-    #θ = μ .+ ζ * τ              # current sampled θ for each individual (normal around μ with std τ)
-                                # therefore ζ must be ~ normal(0,1)
+    μ = μ_0 .+ ϕ .* K_j.*1.0    # current sampled μ for each individual
 
     if (σ > 0) && (τ > 0)
-        return log_normal(ζ,0.0,1.0) +
-               log_prior_flat(ϕ_0) +
-               log_prior_flat(ϕ_1) +
+        return log_prior_theta(θ,μ,τ) +
+               log_prior_flat(μ_0) +
+               log_prior_flat(ϕ) +
                log_prior_flat_positiveOnly(σ) +
                log_prior_flat_positiveOnly(τ)
     else
@@ -380,264 +531,230 @@ I = length(y)       # number of observations
 
 
 #%% Concretise the functions by including the data #############################
-@everywhere log_lklhd(jointParams::Array{Float64}) = log_lklhd_fct(jointParams::Array{Float64}, zlogy, ind, child_j)
-@everywhere log_posterior(jointParams::Array{Float64}) = log_lklhd(jointParams::Array{Float64}) + log_priors(jointParams::Array{Float64})
+@everywhere log_lklhd(jointParams::Array{Float64}) =
+            log_lklhd_fct(jointParams::Array{Float64}, zlogy, ind)
+@everywhere log_posterior(jointParams::Array{Float64}) =
+            log_lklhd(jointParams::Array{Float64}) +
+            log_priors(jointParams::Array{Float64},child_j)
+
 
 
 ################################################################################
 ############################# MCMC #############################################
 #%% Chain Setup
-N = 10^4
-burnIn = 10^2
+noOfChains = 4
+N = 5*10^6                # total number of samples
+N_chain = convert(Int64, N / noOfChains)   # samples per chain
+burnIn = 10^4
 w = ones(Float64,J+4) * 0.1         # typical window size
 m = 100                             # multiplier for maximum window size
 
 #%% MCMC run, make several chains
-chain = SharedArray{Float64}(N,J+4,4);
-pdf = SharedArray{Float64}(N,4);
+chain = SharedArray{Float64}(N_chain,J+4,noOfChains);
+chainPdf = SharedArray{Float64}(N_chain,noOfChains);
 
 # (using threads for parallel computing (other stuff didn't work)):
 # Threads.@threads led to problems too
 # now using @distributed, prefix with @sync to wait for completion
-@sync @distributed for k in 1:4
+@sync @distributed for k in 1:noOfChains
     x_start = rand(Float64,J+4) * 0.5   # initial vector
-    chain[:,:,k], pdf[:,k] = mySliceSampler(log_posterior,x_start,w,m,N,burnIn);
+    chain[:,:,k], chainPdf[:,k] = mySliceSampler(log_posterior,x_start,w,m,N_chain,burnIn);
 end
 # My machine: 4 cores, i7-7500U 2,7 GHz x 2 each, on Linux
-# N=10^4 takes around 15 (with threads: 19) seconds. if not parallel, then 25 seconds
-# N=10^5 takes around 117 (with threads: 132) seconds. if not parallel, then 235 seconds
+# N=10^5 takes around 25 seconds.
+# N=10^6 takes around 120 seconds.
+# N=5*10^6 takes around 590 seconds.
 
-#%%
-# Calculate ESS here
 
-#%% Fuse the chains
-chain = sum(chain,dims=3)
+################################################################################
+############################# RESULTS ##########################################
 
-#%%
-histogram(chain[:,J+4],bins=100,linealpha=0.0,alpha=0.5,normalize=:pdf)
-Plots.savefig("/home/johhub/Desktop/ABDA/A6/test.pdf")
+##############
+# Acess results and Transform back (undo mean-centering and scaling and go to non-log space)
+# See derivation in PDF file instead
 
-#%% Transform back (undo mean-centering and scaling and go to non-log space)
-#
-# we assumed mean-centered and scaled log-normal distributions for theta
-# by our "tricks" above, i.e. μ_y, σ_y fixed
-#                    z_logy   ~  Normal(θ, σ^2)
-#       (log(y) - m_y) / σ_y  ~  Normal(θ, σ^2)
-#       (log(y) - m_y) / σ_y  =  θ + σ * x
-# where y is the observation and x the predictor, then
-#       log(y) = (θ + σ * x) * σ_y + m_y
-#       log(y) = θ*σ_y + σ*σ_y*x  + m_y
-#       log(y) = θ*σ_y + m_y + σ*σ_y*x
-#       log(y) = θ_trans + σ_trans * x
-#       log(y) ~ Normal(θ_trans, σ_trans^2)
-#           y  = exp(θ_trans + σ_trans * x)
-#           y  ~ LogNormal(θ_trans, σ_trans^2)
-#         E[y] = exp(θ_trans + σ_trans^2 / 2)
-#
-# The same is true for the prior distribution yielding theta:
-# ()μ and τ come from hyperdistributions)
-#                         θ ~ Normal(μ,τ^2)
-#     (θ_trans - m_y) / σ_y = μ + τ * xi
-#                   θ_trans = μ*σ_y + m_y + τ*σ_y*xi
-#                   θ_trans = μ_trans + τ_trans*xi
-#                   θ_trans ~ Normal(μ_trans, τ_trans^2)
-#
-#                    log(y) = μ_trans + τ_trans*xi + σ_trans*x
-# xi and x are both ~ N(0,1)
-# a sum of two distributions, i.e. here N(0,τ_trans^2) + N(0,σ_trans^2), are a
-# convolution of the two, thus their sum is: N(0,τ_trans^2 + σ_trans^2)
-# assuming independence, and therefore
-#                    log(y) = μ_trans + sqrt(τ_trans^2 + σ_trans^2)*x
-#                    log(y) ~ Normal(μ_trans, (σ_trans^2 + τ_trans^2))
-#                      E[y] = exp(μ_trans + (σ_trans^2 + τ_trans^2) / 2)
-#                      E[y] = exp(μ_trans + σ_trans^2 / 2 + τ_trans^2 / 2)
+# Access the parameters and fuse the chains:
+θ = Array{Float64,2}(undef,N,J)
+for j in 1:J
+    θ[:,j] = chain[:,j,:][:]
+end
+μ_0 = chain[:,J+1,:][:]
+σ   = chain[:,J+2,:][:]
+τ   = chain[:,J+3,:][:]
+ϕ   = chain[:,J+4,:][:]
 
-# Originals
-# ζ = chain[:,1:J]
-# ϕ_0 = chain[:,(J+1)]
-# σ = chain[:,(J+2)]
-# τ = chain[:,(J+3)]
-# ϕ_1 = chain[:,(J+3)]
-#
-# # Un-scale and un-mean-centre:
-# θ_trans = θ .* logStd .+ logMean
-# μ_trans = μ .* logStd .+ logMean
-# σ_trans = σ .* logStd
-# τ_trans = τ .* logStd
-#
-# # Get into non-log space:
-# θ_trans_unLog = exp.(θ_trans .+ 0.5 .* repeat(σ_trans,1,J).^2)
-# μ_trans_unLog = exp.(μ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2)
+#####
+# Autocorrelation and ESS
+ess_θ = Array{Float64,1}(undef,J)
+for j in 1:J
+    ess_θ[j] = ess(θ[:,j])
+    println("ESS of θ_$j = ",ess_θ[j])
+end
+println("Minimal ESS is of θ_$(argmin(ess_θ)) = ",ess(θ[:,argmin(ess_θ)]))
+println("Maximal ESS is of θ_$(argmax(ess_θ)) = ",ess(θ[:,argmax(ess_θ)]))
+
+println("ESS of μ_0 = ",ess(μ_0))
+println("ESS of σ = ",ess(σ))
+println("ESS of τ = ",ess(τ))
+println("ESS of ϕ = ",ess(ϕ))
+
+
+#####
+# Un-scale and un-mean-centre:
+θ_unscaled = θ .* logStd .+ logMean
+# adults:
+μ_0_unscaled = (μ_0 .+ 0) .* logStd .+ logMean
+# kids only:
+μ_ϕ_unscaled = (μ_0 .+ ϕ) .* logStd .+ logMean
+ϕ_unscaled = ϕ .* logStd
+
+σ_unscaled = σ .* logStd
+τ_unscaled = τ .* logStd
+
+#####
+# Get into non-log space:
+θ_unscaled_unLog = exp.(θ_unscaled .+ 0.5 .* repeat(σ_unscaled,1,J).^2);
+μ_0_trans_unLog = exp.(μ_0_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);    # adults
+μ_ϕ_trans_unLog = exp.(μ_0_unscaled .+ ϕ_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);  # kids
 
 
 ################################################################################
 ############################# TASKS ############################################
-#
-# ######################## Task A-1 (the Dude)####################################
-# #%% Mode, Mean, HDIs
-# dude = θ_trans_unLog[:,4]
-# ω = mean(find_mode(dude))
-# μ_bar = mean(dude);
-# left,right = hdi(dude);
-#
-# #%% Plotting
-# histogram(dude, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-# dPlot = density!(dude,linewidth=3,label="density estimate")
-# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-# dTopPoint = maximum(dCurve)
-# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-#
-# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A1-Dude-Slice.pdf")
-#
-#
-# ######################## Task A-2-a-i (expectation new individual) #############
-# #%% Mode, Mean, HDIs
-# samplePts = μ_trans_unLog
-# ω = mean(find_mode(samplePts))
-# μ_bar = mean(samplePts);
-# left,right = hdi(samplePts);
-#
-# #%% Plotting
-# histogram(samplePts, bins=100, normalize=:pdf, label="MCMC", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-# dPlot = density!(samplePts,linewidth=3,label="density estimate")
-# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-# dTopPoint = maximum(dCurve)
-# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-#
-# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Group-Slice.pdf")
-#
-#
-# ########################  Task A-2-a-ii (new individual prediction)  ############
-# #%% Predict a reaction time for a single measurement (y)
-# zlogy_sim = zeros(N)
-# for i in 1:N
-#     # 1) Pick a posterior sample from mu, tau, and sigma
-#     idx = Int(ceil(rand()*N))   # choose a random index which will pick from the simulated posterior
-#     μ_pick = μ[idx]
-#     τ_pick = τ[idx]
-#     σ_pick = σ[idx]
-#     # 2) Simulate a new theta given these samples, i.e. theta ~ N(μ,τ)
-#     θ_sim  = μ_pick + randn()*τ_pick
-#     # 3) Simulate a reaction time measurement (y) given the picked theta and sigma, i.e. zlogy ~ N(θ,σ)
-#     zlogy_sim[i] = θ_sim + randn()*σ_pick
-# end
-#
-# # 4) Calculate y from zlogy (undo mean-centering and scaling, and go to non-log space)
-# y_sim = exp.(zlogy_sim .* logStd .+ logMean)
-# samplePts = y_sim
-#
-# ω = mean(find_mode(samplePts))
-# μ_bar = mean(samplePts);
-# med = median(samplePts);
-# left,right = hdi(samplePts);
-#
-# histogram(samplePts, bins=100, normalize=:pdf, label="Simulation", alpha=0.3, linealpha=0.1)   # Comes from StatsPlots now
-# dPlot = density!(samplePts,linewidth=3,label="density estimate")
-# dCurve = filter(!isnan,dPlot.series_list[1].plotattributes[:y])
-# dTopPoint = maximum(dCurve)
-# plot!([(left,0),(left,dTopPoint/2)], linewidth=3, color="green", label="HDI",
-#        annotations = (left, dTopPoint/2, text("$(Int(round(left)))",:green,:bottom)))
-# plot!([(right,0),(right,dTopPoint/2)],linewidth=3,color="green",label="HDI",
-#        annotations = (right, dTopPoint/2, text("$(Int(round(right)))",:green,:bottom)))
-# plot!([(μ_bar,0),(μ_bar,dTopPoint)], linewidth=3, color="blue", label="mean",
-#        annotations = (μ_bar, 0, text("$(Int(round(μ_bar)))",:blue,:top)))
-# plot!([(ω,0),(ω,dTopPoint)], linewidth=3, color="red", label="mode",
-#        annotations = (ω, dTopPoint, text("$(Int(round(ω)))",:red,:bottom)))
-# plot!([(med,0),(med,dTopPoint)], linewidth=3, color="purple", label="median",
-#        annotations = (med, 0, text("$(Int(round(med)))",:purple,:bottom)))
-#
-# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Pred-Slice.pdf")
-#
-#
-# ########################  Task A-2-b (compare to website statistics)  ##########
-# #%% Taken from the homepage:
-# median_web = 273.0
-# mean_web = 284.0
-# println("Δ Median = ",median_web - med)
-# println("Δ Mean = ",mean_web - μ_bar)
-#
-#
-# ########################  Task A-3 #############################################
-# # Compare hierarchical theta to individual theta using sample means
-#
-# #%% Logarithmic sample means
-# θ_means_log = zeros(J)
-# #for i in 1:I
-# #    n = length(findall(x -> x==ind[i],ind)) # finding the number of data points for each individual
-# #    θ_means_log[ind[i]] += logy[i] / n  # sum up the weighted results
-# #end
-# # or use this alternative:
-# for j in 1:J
-#     θ_means_log[j] = mean(logy[ind .== j])
-# end
-#
-#
-# #%% Plot into one figure
-# # Get ordered indices:
-# sortIdx = sortperm(θ_means_log)
-# # Limits for the figure
-# myXlims = (minimum(θ_trans),maximum(θ_trans))
-# # Initialise the subplots
-# StatsPlots.plot(layout=(J, 1),size = (1000, 1500))
-# # Plot each theta:
-# for i in 1:(J-1)
-#     j = sortIdx[i]
-#     # Sampled thetas and their mean:
-#     histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
-#             ann=(myXlims[1]+.05,4,"ind $j:"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims)
-#     vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=i, legend=false)
-#
-#     # The (log) sample means of the initial data:
-#     vline!([θ_means_log[j]],linewidth=3, color="red", subplot=i, legend=false)
-# end
-#
-# # The last one separately so I can see it in Hydrogen:
-# j = sortIdx[J]
-# histogram!(θ_trans[:,j], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
-#             ann=(myXlims[1]+.05,10,"ind $J:"),ticks=nothing, yaxis=false, subplot=J, xlims=myXlims)
-# vline!([mean(θ_trans[:,j])],linewidth=3, color="black", subplot=J, legend=false)
-# vline!([θ_means_log[j]],linewidth=3, color="red", subplot=J, legend=false)
-#
-# Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-All.pdf")
+
+######################## Task 1 ####################################
+# Effect of being a kid:
+makeDistributionPlot(ϕ, "orange")
+Plots.savefig(projDir*"/figs/phi_Slice.pdf")
+makeDistributionPlot(ϕ_unscaled, "orange")
+Plots.savefig(projDir*"/figs/phi_unscaled_Slice.pdf")
 
 
-# --------------- Old Code (please ignore) -------------------------
-# theta ~ N(θ_means_log,sigma)
+######################## Task 2 #############
+makeDistributionPlot(τ,"blue")
+Plots.savefig(projDir*"/figs/tau_Slice.pdf")
 
-#histogram(θ_trans[:,1], bins=100, normalize=:pdf,label="theta from MCMC",alpha=0.2, linealpha=0.0)
-#plot([(θ_means_log[1],0),(θ_means_log[1],.5)], linewidth=3, color="red", label="sample mean",
-#       annotations = (med, 0, text("$(Int(round(θ_means_log[1])))",:red,:bottom)))
-#plot()
-#for i in 1:12
-#    histogram!(θ_trans[:,i], bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.0,
-#            inset = (1, bbox(0.0,0.1*i,1,0.1,:bottom,:left)),  # x,y, width, height, origin
-#            ticks=nothing, subplot=1+i, bg_inside=nothing)
-#vline!([θ_means_log[i]],linewidth=3, color="red", subplot=i+1, legend=false)
-#end
+makeDistributionPlot(τ_unscaled, "blue")
+Plots.savefig(projDir*"/figs/tau_unscaled_Slice.pdf")
 
-# Get a color map:
-#curColor = get_color_palette(:auto, plot_color(:white), J)
-#for n = 1:Int(ceil(J/5))
-#    plot()
-#    for j in ((n-1)*5+1):min((n*5),J)
-#        histogram!(θ_trans[:,j], bins=100, normalize=:pdf,legend=false,alpha=0.2, linealpha=0.0, color=curColor[j])
-#        vline!([θ_means_log[j]], linewidth=3, color=curColor[j])
-#    end
 
-#Plots.savefig("/home/johhub/Desktop/ABDA/A5/figs/A2-Comp-MLE-Slice-$n.pdf")
+######################## Task 3, Priors of expected log reaction #############
+# prior for theta was
+# theta[j] ~ normal(mu + phi*ISKID[j],tau)
 
-#end
+prior_adult = mean(μ_0_unscaled) .+ mean(τ_unscaled) .* randn(N)
+prior_kid = mean(μ_0_unscaled) .+ mean(ϕ_unscaled) .+ mean(τ_unscaled) .* randn(N)
+makeDistributionPlot(prior_adult,"black")
+makeDistributionPlot!(prior_kid,"red")
+Plots.savefig(projDir*"/figs/priors_Slice.pdf")
+
+# Logarithmic sample means
+θ_mean_unscaled = zeros(J)
+for j in 1:J
+    θ_mean_unscaled[j] = mean(logy[ind .== j])
+end
+
+#%% Plot into one figure
+# Get ordered indices:
+sIdx = sortperm(θ_mean_unscaled)
+
+plt = makeDistributionPlot(prior_adult,"black",ann=false)
+makeDistributionPlot!(prior_kid,"red",ann=false)
+top = 1.6;
+for i in 1:J
+    j = sIdx[i]
+    if child_j[j] == 1
+        color = "red"
+    else
+        color = "black"
+    end
+    makeDistributionPlot!(θ_unscaled[:,j],color,ann=false,offset=i*top/J,scale=1/100)
+
+end
+plt
+
+Plots.savefig(projDir*"/figs/priors_postOverlay_Slice.pdf")
+
+
+######################## Task 4, posterior prediction #############
+#### a) knowing that it is a child
+
+# Posterior predictive sampling:
+idx = Int.(ceil.(rand(N).*N))   # choose random indices which will pick from the simulated posterior
+# Sample zlogy according to the model:
+zlogy_sim_adult = μ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+zlogy_sim_kid = μ[idx] .+ ϕ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+# Transform to non-standardised and non-log:
+y_sim_adult = exp.(zlogy_sim_adult .* logStd .+ logMean)
+y_sim_kid = exp.(zlogy_sim_kid .* logStd .+ logMean)
+
+makeDistributionPlot(y_sim_adult,"black",ann=true)
+makeDistributionPlot!(y_sim_kid,"red",ann=true)
+Plots.savefig(projDir*"/figs/PP_known_Slice.pdf")
+
+##############
+#### b) not knowing that it is a child
+# assuming a prior of equally likely to be adult or child (beta(1,1))
+# then add a likelihood corresponding to a bernoulli processs, with number of
+# heads equvivalent to number of kids among all individuals
+# the posterior probability of having the amount of childs among
+# our total individuals is given by a bernoulli process with a beta
+# with parameters a=b=1, N = # of individuals, z = # of kids
+
+nr_kids = sum(child_j)  # number of heads
+a = nr_kids + 1         # head (kid) count here
+b = J - nr_kids + 1     # non-heads (adults)
+postBeingKid = rand(Beta(a,b),N)
+areKids = postBeingKid .>= rand(N)  # only those who make it over the threshold
+
+# Posterior predictive sampling
+idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
+zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
+# Compare in plots:
+makeDistributionPlot(y_sim_unknown,"blue",ann=true)
+histogram!(y_sim_adult, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="black")
+histogram!(y_sim_kid, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="red")
+Plots.savefig(projDir*"/figs/PP_unknown_Slice.pdf")
+
+
+##############
+#### b-Version 2) not knowing that it is a child, set a fixed fraction
+# using fraction 0.5
+weight = 0.5
+postBeingKid = weight
+areKids = postBeingKid .>= rand(N)
+idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
+zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
+makeDistributionPlot(y_sim_unknown,"blue",ann=true)
+histogram!(y_sim_adult, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="black")
+histogram!(y_sim_kid, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="red")
+plot!(ann=(1200,0.0025,"Kids: $(weight*100) %"),grid=false)
+Plots.savefig(projDir*"/figs/PP_unknown_fixed05_Slice.pdf")
+
+
+
+#cur_colors = get_color_palette(:auto, plot_color(:white), 11)
+# Limits for the figure
+myXlims = (50,1200)
+#myYlims = (0,0.006)
+
+plt = StatsPlots.plot(size = (800, 1600),xlims=myXlims)
+
+# Try various fixed ratios:
+for (i, weight) in enumerate(0:.1:1)
+    postBeingKid = weight
+    areKids = postBeingKid .>= rand(N)
+    idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
+    zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+    y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
+
+    makeDistributionPlot!(y_sim_unknown,"blue",ann=false,offset=(i-1)*0.006,scale=1.0)
+    makeDistributionPlot!(y_sim_adult,"black",ann=false,offset=(i-1)*0.006,scale=1.0)
+    makeDistributionPlot!(y_sim_kid,"red",ann=false,offset=(i-1)*0.006,scale=1.0)
+    plot!(ann=(myXlims[2]-200,(i-1)*0.006+0.003,"Kids: $(weight*100) %"),grid=false,yticks=false)
+end
+# Show plot
+plt
+
+Plots.savefig(projDir*"/figs/CompMixture_Slice.pdf")
