@@ -321,8 +321,8 @@ zlogy = (logy .- logMean) ./ logStd;
 
 #%% Stan Setup #################################################################
 noOfChains = 4
-N = 10^5                # total number of samples
-N_chain = convert(Int64, 10^5 / noOfChains)   # samples per chain
+N = 10^6                # total number of samples
+N_chain = convert(Int64, N / noOfChains)   # samples per chain
 keepchains = false
 burnIn = 10^4           # burni-in per chain
 
@@ -391,6 +391,7 @@ rc, chn, cnames = stan(myModel,
                        diagnostics = false,
                        CmdStanDir = CMDSTAN_HOME);
 
+# takes for N=10^6 around 5 minutes
 
 ################################################################################
 ############################# RESULTS ##########################################
@@ -498,8 +499,8 @@ zlogy_sim_kid = μ[idx] .+ ϕ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
 y_sim_adult = exp.(zlogy_sim_adult .* logStd .+ logMean)
 y_sim_kid = exp.(zlogy_sim_kid .* logStd .+ logMean)
 
-makeDistributionPlot(y_sim_adult,"black",true)
-makeDistributionPlot!(y_sim_kid,"red",true)
+makeDistributionPlot(y_sim_adult,"black",ann=true)
+makeDistributionPlot!(y_sim_kid,"red",ann=true)
 Plots.savefig(projDir*"/figs/PP_known_Stan.pdf")
 
 ##############
@@ -522,7 +523,7 @@ idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the
 zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
 y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
 # Compare in plots:
-makeDistributionPlot(y_sim_unknown,"blue",true)
+makeDistributionPlot(y_sim_unknown,"blue",ann=true)
 histogram!(y_sim_adult, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="black")
 histogram!(y_sim_kid, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="red")
 Plots.savefig(projDir*"/figs/PP_unknown_Stan.pdf")
@@ -530,12 +531,13 @@ Plots.savefig(projDir*"/figs/PP_unknown_Stan.pdf")
 
 ##############
 #### b-Version 2) not knowing that it is a child, set a fixed fraction
-cur_colors = get_color_palette(:auto, plot_color(:white), 11)
+#cur_colors = get_color_palette(:auto, plot_color(:white), 11)
 # Limits for the figure
 myXlims = (100,1000)
-myYlims = (0,0.006)
+#myYlims = (0,0.006)
 # Initialise the subplots
-plt = StatsPlots.plot(layout=(11, 1),size = (800, 1600))
+plt = StatsPlots.plot(size = (800, 1600),xlims=myXlims)
+#plt = plot()
 # Try various fixed ratios:
 for (i, weight) in enumerate(0:.1:1)
     postBeingKid = weight
@@ -544,10 +546,13 @@ for (i, weight) in enumerate(0:.1:1)
     zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
     y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
 
-    histogram!(y_sim_unknown, bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.3,
-            ann=(myXlims[2]-200,.003,"Kids: $(weight*100) %"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims, ylims=myYlims, color=cur_colors[i])
-    vline!([mean(y_sim_unknown)],linewidth=3, color="black", subplot=i, legend=false, linestyle=:dash)
+    makeDistributionPlot!(y_sim_unknown,"blue",ann=false,offset=i*0.006,scale=1.0)
+    #histogram!(y_sim_unknown, bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.3,
+    #        ann=(myXlims[2]-200,.003,"Kids: $(weight*100) %"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims, ylims=myYlims, color=cur_colors[i])
+    #vline!([mean(y_sim_unknown)],linewidth=3, color="black", subplot=i, legend=false, linestyle=:dash)
+    plot!(ann=(myXlims[2]-200,i*0.006+0.003,"Kids: $(weight*100) %"),grid=false,ticks=false)
 end
 # Show plot
 plt
-Plots.savefig(projDir*"/A6/figs/CompMixture_Stan.pdf")
+#plot!(xlims=myXlims)
+Plots.savefig(projDir*"/figs/CompMixture_Stan.pdf")
