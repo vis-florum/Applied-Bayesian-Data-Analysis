@@ -173,7 +173,7 @@ end
 
 
 # A function to make the plots with HDIs
-function makeDistributionPlot(X, color="blue", annotating=true)
+function makeDistributionPlot(X, color="blue"; ann=true, offset=0.0, scale=1.0)
     #%% Mode, Mean, HDIs
     ω = mean(find_mode(X))
     μ_bar = mean(X);
@@ -186,44 +186,59 @@ function makeDistributionPlot(X, color="blue", annotating=true)
     riemannSum = sum(w.*diff(e))
     w = w ./ riemannSum
 
-    w_left = w[sum(e .< left)]   # comparison leaves at max left edge of bar that contains the limit
-    w_right = w[sum(e .< right)]
-    w_ω = w[sum(e .< ω)]
-    w_μ = w[sum(e .< μ_bar)]
+    e2 = similar([e[:]; e[:]])  # doubling of the edge vector
+    e2[2:2:end] = e             # even indices
+    e2[1:2:end] = e             # odd indices
+    e2 = e2[2:(end-1)]          # pop the ends
+
+    w2 = similar([w[:]; w[:]])  # doubling of the weight vector
+    w2[2:2:end] = w             # even indices
+    w2[1:2:end] = w             # odd indices
+    w2 = w2 .* scale .+ offset
+
+    w_left = w[sum(e .< left)] * scale + offset  # comparison leaves at max left edge of bar that contains the limit
+    w_right = w[sum(e .< right)] * scale + offset
+    w_ω = w[sum(e .< ω)] * scale + offset
+    w_μ = w[sum(e .< μ_bar)] * scale + offset
 
     #%% Plotting
+    plot(e2, w2,
+         linealpha=0.1, linecolor=color,
+         fillrange=offset, fillalpha=0.4, fillcolor=color,
+         legend=false)
+
+    # or do it by histogram, then we also have vertical lines
     # specify statsplot?
+    #histogram(X, bins=100, normalize=:pdf,
+    #          color=color, alpha=0.4, linealpha=0.1, legend=false)   # Comes from StatsPlots now
 
-    histogram(X, bins=100, normalize=:pdf,
-              color=color, alpha=0.4, linealpha=0.1, legend=false)   # Comes from StatsPlots now
-
-    if annotating
-    plot!([(left,0),(left,w_left)],
+    if ann
+    plot!([(left,offset),(left,w_left)],
         linewidth=1.5, color=color, linestyle=:dash,
         annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,rotation=90,:center,:left)))
-    plot!([(right,0),(right,w_right)],
+    plot!([(right,offset),(right,w_right)],
         linewidth=1.5, color=color, linestyle=:dash,
         annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,rotation=90,:center,:left)))
-    plot!([(μ_bar,0),(μ_bar,w_μ)],
+    plot!([(μ_bar,offset),(μ_bar,w_μ)],
         linewidth=1.5, color=color, linestyle=:dash,
         annotations = (μ_bar, 0.5*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,rotation=90,:bottom,:right)))
-    plot!([(ω,0),(ω,w_ω)],
+    plot!([(ω,offset),(ω,w_ω)],
         linewidth=1.5, color=color, linestyle=:dashdot,
         annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,rotation=90,:bottom,:right)))
     else
-    plot!([(left,0),(left,w_left)],
+    plot!([(left,offset),(left,w_left)],
         linewidth=1.5, color=color, linestyle=:dash)
-    plot!([(right,0),(right,w_right)],
+    plot!([(right,offset),(right,w_right)],
         linewidth=1.5, color=color, linestyle=:dash)
-    plot!([(μ_bar,0),(μ_bar,w_μ)],
+    plot!([(μ_bar,offset),(μ_bar,w_μ)],
         linewidth=1.5, color=color, linestyle=:dash)
-    plot!([(ω,0),(ω,w_ω)],
+    plot!([(ω,offset),(ω,w_ω)],
         linewidth=1.5, color=color, linestyle=:dashdot)
     end
 end
 
 
-function makeDistributionPlot!(X, color="blue",annotating=true)
+function makeDistributionPlot!(X, color="blue"; ann=true, offset=0.0, scale=1.0)
     #%% Mode, Mean, HDIs
     ω = mean(find_mode(X))
     μ_bar = mean(X);
@@ -236,40 +251,55 @@ function makeDistributionPlot!(X, color="blue",annotating=true)
     riemannSum = sum(w.*diff(e))
     w = w ./ riemannSum
 
-    w_left = w[sum(e .< left)]   # comparison leaves at max left edge of bar that contains the limit
-    w_right = w[sum(e .< right)]
-    w_ω = w[sum(e .< ω)]
-    w_μ = w[sum(e .< μ_bar)]
+    e2 = similar([e[:]; e[:]])  # doubling of the edge vector
+    e2[2:2:end] = e             # even indices
+    e2[1:2:end] = e             # odd indices
+    e2 = e2[2:(end-1)]          # pop the ends
+
+    w2 = similar([w[:]; w[:]])  # doubling of the weight vector
+    w2[2:2:end] = w             # even indices
+    w2[1:2:end] = w             # odd indices
+    w2 = w2 .* scale .+ offset
+
+    w_left = w[sum(e .< left)] * scale + offset  # comparison leaves at max left edge of bar that contains the limit
+    w_right = w[sum(e .< right)] * scale + offset
+    w_ω = w[sum(e .< ω)] * scale + offset
+    w_μ = w[sum(e .< μ_bar)] * scale + offset
 
     #%% Plotting
+    plot!(e2, w2,
+         linealpha=0.1, linecolor=color,
+         fillrange=offset, fillalpha=0.4, fillcolor=color,
+         legend=false)
+
+    # or do it by histogram, then we also have vertical lines
     # specify statsplot?
+    #histogram!(X, bins=100, normalize=:pdf,
+    #          color=color, alpha=0.4, linealpha=0.1, legend=false)   # Comes from StatsPlots now
 
-    histogram!(X, bins=100, normalize=:pdf,
-              color=color, alpha=0.3, linealpha=0.1, legend=false)   # Comes from StatsPlots now
-
-  if annotating
-  plot!([(left,0),(left,w_left)],
-      linewidth=1.5, color=color, linestyle=:dash,
-      annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,rotation=90,:center,:left)))
-  plot!([(right,0),(right,w_right)],
-      linewidth=1.5, color=color, linestyle=:dash,
-      annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,rotation=90,:center,:left)))
-  plot!([(μ_bar,0),(μ_bar,w_μ)],
-      linewidth=1.5, color=color, linestyle=:dash,
-      annotations = (μ_bar, 0.5*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,rotation=90,:bottom,:right)))
-  plot!([(ω,0),(ω,w_ω)],
-      linewidth=1.5, color=color, linestyle=:dashdot,
-      annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,rotation=90,:bottom,:right)))
-  else
-  plot!([(left,0),(left,w_left)],
-      linewidth=1.5, color=color, linestyle=:dash)
-  plot!([(right,0),(right,w_right)],
-      linewidth=1.5, color=color, linestyle=:dash)
-  plot!([(μ_bar,0),(μ_bar,w_μ)],
-      linewidth=1.5, color=color, linestyle=:dash)
-  plot!([(ω,0),(ω,w_ω)],
-      linewidth=1.5, color=color, linestyle=:dashdot)
-  end
+    if ann
+    plot!([(left,offset),(left,w_left)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (left, w_left, text("$(round(left,sigdigits=4))",color,rotation=90,:center,:left)))
+    plot!([(right,offset),(right,w_right)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (right, w_right, text("$(round(right,sigdigits=4))",color,rotation=90,:center,:left)))
+    plot!([(μ_bar,offset),(μ_bar,w_μ)],
+        linewidth=1.5, color=color, linestyle=:dash,
+        annotations = (μ_bar, 0.5*w_μ, text("mean $(round(μ_bar,sigdigits=4))",color,rotation=90,:bottom,:right)))
+    plot!([(ω,offset),(ω,w_ω)],
+        linewidth=1.5, color=color, linestyle=:dashdot,
+        annotations = (ω, w_ω, text("mode $(round(ω,sigdigits=4))",color,rotation=90,:bottom,:right)))
+    else
+    plot!([(left,offset),(left,w_left)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(right,offset),(right,w_right)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(μ_bar,offset),(μ_bar,w_μ)],
+        linewidth=1.5, color=color, linestyle=:dash)
+    plot!([(ω,offset),(ω,w_ω)],
+        linewidth=1.5, color=color, linestyle=:dashdot)
+    end
 end
 
 #%% Logarithmise and Transform Data ############################################
@@ -362,8 +392,11 @@ rc, chn, cnames = stan(myModel,
                        CmdStanDir = CMDSTAN_HOME);
 
 
+################################################################################
+############################# RESULTS ##########################################
+
 ##############
-#%% Transform back (undo mean-centering and scaling and go to non-log space)
+# Acess results and Transform back (undo mean-centering and scaling and go to non-log space)
 # See derivation in PDF file instead
 
 # Access the axis array by names:
@@ -377,9 +410,10 @@ end
 τ = 1.0 * chn.value[Axis{:var}("tau")][:]
 
 
-#%%
+#####
 # Un-scale and un-mean-centre:
 θ_unscaled = θ .* logStd .+ logMean
+# adults:
 μ_0_unscaled = (μ .+ 0) .* logStd .+ logMean
 # kids only:
 μ_ϕ_unscaled = (μ .+ ϕ) .* logStd .+ logMean
@@ -388,59 +422,71 @@ end
 σ_unscaled = σ .* logStd
 τ_unscaled = τ .* logStd
 
-
+#####
 # Get into non-log space:
 θ_unscaled_unLog = exp.(θ_unscaled .+ 0.5 .* repeat(σ_unscaled,1,J).^2);
-
 μ_0_trans_unLog = exp.(μ_0_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);    # adults
 μ_ϕ_trans_unLog = exp.(μ_0_unscaled .+ ϕ_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);  # kids
 
-# need to transform μ+ϕ together? instead, then subtract the mu
-#ϕ_trans_unLog = exp.(ϕ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
-#ϕ_trans_unLog = μ_ϕ_trans_unLog - μ_0_trans_unLog;
-#ϕ_trans_unLog = logStd.*ϕ
-
-
-#τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_0_trans .+ τ_trans.^2))
-#τ_trans_unLog = sqrt.((exp.(τ_trans.^2) .- 1.0) .* (2.0 .* μ_ϕ_trans .+ τ_trans.^2))
-#logy_trans_unLog = exp.(logy_trans);
 
 ################################################################################
 ############################# TASKS ############################################
 
 ######################## Task 1 ####################################
-# Group effects:
-makeDistributionPlot(ϕ)
-makeDistributionPlot(ϕ_unscaled)
-
-# Groups:
-#makeDistributionPlot(μ_0_unscaled)
-#makeDistributionPlot(μ_ϕ_unscaled)
-
-#Plots.savefig(projDir*"/A6/figs/CompMixture_Stan.pdf")
+# Effect of being a kid:
+makeDistributionPlot(ϕ, "orange")
+Plots.savefig(projDir*"/figs/phi_Stan.pdf")
+makeDistributionPlot(ϕ_unscaled, "orange")
+Plots.savefig(projDir*"/figs/phi_unscaled_Stan.pdf")
 
 
 ######################## Task 2 #############
-makeDistributionPlot(τ)
-makeDistributionPlot(τ_unscaled)
+makeDistributionPlot(τ,"blue")
+Plots.savefig(projDir*"/figs/tau_Stan.pdf")
 
-#Plots.savefig(projDir*"/A6/figs/CompMixture_Stan.pdf")
+makeDistributionPlot(τ_unscaled, "blue")
+Plots.savefig(projDir*"/figs/tau_unscaled.pdf")
 
 
 ######################## Task 3, Priors of expected log reaction #############
 # prior for theta was
 # theta[j] ~ normal(mu + phi*ISKID[j],tau)
-X = randn(100000)
 
-prior_kid = mean(μ_0_unscaled) .+ mean(ϕ_unscaled) .+ mean(τ_unscaled) .* X
-prior_adult = mean(μ_0_unscaled) .+ mean(τ_unscaled) .* X
-makeDistributionPlot(prior_kid)
-makeDistributionPlot(prior_adult)
+prior_adult = mean(μ_0_unscaled) .+ mean(τ_unscaled) .* randn(N)
+prior_kid = mean(μ_0_unscaled) .+ mean(ϕ_unscaled) .+ mean(τ_unscaled) .* randn(N)
+makeDistributionPlot(prior_adult,"black")
+makeDistributionPlot!(prior_kid,"red")
+Plots.savefig(projDir*"/figs/priors_Stan.pdf")
 
-#Plots.savefig(projDir*"/A6/figs/CompMixture_Stan.pdf")
+# Logarithmic sample means
+θ_mean_unscaled = zeros(J)
+for j in 1:J
+    θ_mean_unscaled[j] = mean(logy[ind .== j])
+end
+
+#%% Plot into one figure
+# Get ordered indices:
+sIdx = sortperm(θ_mean_unscaled)
+
+plt = makeDistributionPlot(prior_adult,"black",ann=false)
+makeDistributionPlot!(prior_kid,"red",ann=false)
+top = 1.6;
+for i in 1:J
+    j = sIdx[i]
+    if child_j[j] == 1
+        color = "red"
+    else
+        color = "black"
+    end
+    makeDistributionPlot!(θ_unscaled[:,j],color,ann=false,offset=i*top/J,scale=1/100)
+
+end
+plt
+
+Plots.savefig(projDir*"/figs/priors_postOverlay_Stan.pdf")
 
 
-######################## Task 4, posterior prediciton #############
+######################## Task 4, posterior prediction #############
 #### a) knowing that it is a child
 
 # Posterior predictive sampling:
