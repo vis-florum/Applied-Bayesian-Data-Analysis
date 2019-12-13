@@ -531,9 +531,24 @@ Plots.savefig(projDir*"/figs/PP_unknown_Stan.pdf")
 
 ##############
 #### b-Version 2) not knowing that it is a child, set a fixed fraction
+# using fraction 0.5
+weight = 0.5
+postBeingKid = weight
+areKids = postBeingKid .>= rand(N)
+idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
+zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
+y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
+makeDistributionPlot(y_sim_unknown,"blue",ann=true)
+histogram!(y_sim_adult, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="black")
+histogram!(y_sim_kid, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="red")
+plot!(ann=(1200,0.0025,"Kids: $(weight*100) %"),grid=false)
+Plots.savefig(projDir*"/figs/PP_unknown_fixed05_Stan.pdf")
+
+
+
 #cur_colors = get_color_palette(:auto, plot_color(:white), 11)
 # Limits for the figure
-myXlims = (100,1000)
+myXlims = (50,1200)
 #myYlims = (0,0.006)
 # Initialise the subplots
 plt = StatsPlots.plot(size = (800, 1600),xlims=myXlims)
@@ -546,11 +561,13 @@ for (i, weight) in enumerate(0:.1:1)
     zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
     y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
 
-    makeDistributionPlot!(y_sim_unknown,"blue",ann=false,offset=i*0.006,scale=1.0)
+    makeDistributionPlot!(y_sim_unknown,"blue",ann=false,offset=(i-1)*0.006,scale=1.0)
+    makeDistributionPlot!(y_sim_adult,"black",ann=false,offset=(i-1)*0.006,scale=1.0)
+    makeDistributionPlot!(y_sim_kid,"red",ann=false,offset=(i-1)*0.006,scale=1.0)
     #histogram!(y_sim_unknown, bins=100, normalize=:pdf, legend=false, alpha=0.3, linealpha=0.3,
     #        ann=(myXlims[2]-200,.003,"Kids: $(weight*100) %"),ticks=nothing, yaxis=false, subplot=i, xlims=myXlims, ylims=myYlims, color=cur_colors[i])
     #vline!([mean(y_sim_unknown)],linewidth=3, color="black", subplot=i, legend=false, linestyle=:dash)
-    plot!(ann=(myXlims[2]-200,i*0.006+0.003,"Kids: $(weight*100) %"),grid=false,yticks=false)
+    plot!(ann=(myXlims[2]-200,(i-1)*0.006+0.003,"Kids: $(weight*100) %"),grid=false,yticks=false)
 end
 # Show plot
 plt
