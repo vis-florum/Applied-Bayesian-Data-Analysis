@@ -1,4 +1,4 @@
-using Revise
+#using Revise
 using CmdStan
 using Plots
 using StatsPlots
@@ -161,7 +161,7 @@ zlogy = (logy .- logMean) ./ logStd;
 #projDir = dirname(@__FILE__)
 
 # If run from Jupyter/Hydrogen, maybe change to suit you:
-projDir= "/home/johhub/Desktop/ABDA/A5"
+projDir= "/lhome/johhub/Desktop/ABDA/A5"
 #projDir= "/lhome/johhub/Desktop/ABDA/A5"
 tmpDir = projDir*"/tmp"
 
@@ -297,6 +297,37 @@ for i in 2:noOfChains
 end
 
 
+##### RE-READ RESULTS IF CHAIN HAS ALREADY RUN
+# only for re-use purposes, please ignore!
+# using CSV
+#
+# N = 10^6
+#
+# ϕ = Array{Float64,1}(undef,N)
+# θ = Array{Float64,2}(undef,N,J)
+# μ = Array{Float64,1}(undef,N)
+# σ = Array{Float64,1}(undef,N)
+# τ = Array{Float64,1}(undef,N)
+#
+# for i in 1:noOfChains
+#     # subindices
+#     from = N_chain*(i-1) + 1
+#     to = N_chain*i
+#
+#     # read into a DataFrame:
+#     chain_csv = CSV.read(tmpDir*"/reactionTime-V1_samples_$i.csv"; comment="#", normalizenames=true)
+#
+#     θ_df = chain_csv[:,r"theta"]    # regex
+#     for j in 1:J
+#         θ[from:to,j] = θ_df[:,j]  # need to bring on array form, from data frame
+#     end
+#
+#     μ[from:to,:] = chain_csv[:, r"mu"][:,1]
+#     σ[from:to,:] = chain_csv[:, r"sigma"][:,1]
+#     τ[from:to,:] = chain_csv[:, r"tau"][:,1]
+# end
+######
+
 #%%
 # Un-scale and un-mean-centre:
 θ_trans = θ .* logStd .+ logMean
@@ -314,6 +345,19 @@ logy_trans = logy_pred .* logStd .+ logMean
 θ_trans_unLog = exp.(θ_trans .+ 0.5 .* repeat(σ_trans,1,J).^2);
 μ_trans_unLog = exp.(μ_trans .+ 0.5 .* σ_trans.^2 .+ 0.5 .* τ_trans.^2);
 logy_trans_unLog = exp.(logy_trans);
+
+
+### Exporting
+#using CSV, DataFrames
+#exp_τ = Array{Float64,2}(undef,length(τ),2)
+#exp_τ[:,1] = τ
+#exp_τ[:,2] = τ_trans
+#CSV.write(projDir*"/export_tau_A5.csv",  DataFrame(exp_τ), writeheader=false)
+
+#exp_μ = Array{Float64,2}(undef,length(μ),2)
+#exp_μ[:,1] = μ
+#exp_τ[:,2] = μ_trans
+#CSV.write(projDir*"/export_mu_A5.csv",  DataFrame(exp_τ), writeheader=false)
 
 
 ################################################################################
