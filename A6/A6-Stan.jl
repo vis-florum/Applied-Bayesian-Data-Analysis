@@ -178,7 +178,7 @@ function makeDistributionPlot(X, color="blue"; ann=true, offset=0.0, scale=1.0)
     μ_bar = mean(X);
     left,right = hdi(X);
 
-    h = fit(Histogram, X, nbins=100)
+    h = fit(Histogram, X, nbins=200)
     w = h.weights      # weights of each bar
     e = h.edges[1]     # edges of the bars (must be +1 more than bars)
 
@@ -243,7 +243,7 @@ function makeDistributionPlot!(X, color="blue"; ann=true, offset=0.0, scale=1.0)
     μ_bar = mean(X);
     left,right = hdi(X);
 
-    h = fit(Histogram, X, nbins=100)
+    h = fit(Histogram, X, nbins=200)
     w = h.weights      # weights of each bar
     e = h.edges[1]     # edges of the bars (must be +1 more than bars)
 
@@ -392,6 +392,7 @@ rc, chn, cnames = stan(myModel,
 
 # takes for N=10^6 around 5 minutes
 
+
 ################################################################################
 ############################# RESULTS ##########################################
 
@@ -410,6 +411,48 @@ end
 τ = 1.0 * chn.value[Axis{:var}("tau")][:]
 
 
+##### RE-READ RESULTS IF CHAIN HAS ALREADY RUN
+# only for re-use purposes, please ignore!
+using CSV
+
+ϕ = Array{Float64,1}(undef,N)
+θ = Array{Float64,2}(undef,N,J)
+μ = Array{Float64,1}(undef,N)
+σ = Array{Float64,1}(undef,N)
+τ = Array{Float64,1}(undef,N)
+
+for i in 1:noOfChains
+    # subindices
+    from = N_chain*(i-1) + 1
+    to = N_chain*i
+
+    # read into a DataFrame:
+    chain_csv = CSV.read(tmpDir*"/reactionTime-A6_samples_$i.csv"; comment="#", normalizenames=true)
+
+    θ_df = chain_csv[:,r"theta"]    # regex
+    for j in 1:J
+        θ[from:to,j] = θ_df[:,j]  # need to bring on array form, from data frame
+    end
+
+    ϕ[from:to,:] = chain_csv[:, r"phi"][:,1]
+    μ[from:to,:] = chain_csv[:, r"mu"][:,1]
+    σ[from:to,:] = chain_csv[:, r"sigma"][:,1]
+    τ[from:to,:] = chain_csv[:, r"tau"][:,1]
+end
+######
+
+##### RE-READ RESULTS FROM OLD ASSIGNMENT
+using CSV
+
+A5_import = CSV.read(projDir*"/export_tau_A5.csv"; header=false)
+τ_A5 = A5_import[:,1]
+τ_A5_unscaled = A5_import[:,2]
+
+A5_import = CSV.read(projDir*"/export_mu_A5.csv"; header=false)
+μ_A5 = A5_import[:,1]
+μ_A5_unscaled = A5_import[:,2]
+#####
+
 #####
 # Un-scale and un-mean-centre:
 θ_unscaled = θ .* logStd .+ logMean
@@ -424,6 +467,7 @@ end
 
 #####
 # Get into non-log space:
+ϕ_unscaled_unLog = exp.(ϕ_unscaled)
 θ_unscaled_unLog = exp.(θ_unscaled .+ 0.5 .* repeat(σ_unscaled,1,J).^2);
 μ_0_trans_unLog = exp.(μ_0_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);    # adults
 μ_ϕ_trans_unLog = exp.(μ_0_unscaled .+ ϕ_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);  # kids
@@ -439,12 +483,17 @@ Plots.savefig(projDir*"/figs/phi_Stan.pdf")
 makeDistributionPlot(ϕ_unscaled, "orange")
 Plots.savefig(projDir*"/figs/phi_unscaled_Stan.pdf")
 
+makeDistributionPlot(ϕ_unscaled_unLog, "orange")
+Plots.savefig(projDir*"/figs/phi_unscaled_nonlog_Stan.pdf")
+
 
 ######################## Task 2 #############
 makeDistributionPlot(τ,"blue")
+makeDistributionPlot!(τ_A5,"purple")
 Plots.savefig(projDir*"/figs/tau_Stan.pdf")
 
 makeDistributionPlot(τ_unscaled, "blue")
+makeDistributionPlot!(τ_A5_unscaled,"purple")
 Plots.savefig(projDir*"/figs/tau_unscaled_Stan.pdf")
 
 
@@ -486,6 +535,15 @@ plt
 Plots.savefig(projDir*"/figs/priors_postOverlay_Stan.pdf")
 
 
+### Compare to old prior
+prior_A5 = mean(μ_A5_unscaled) .+ mean(τ_A5_unscaled) .* randn(N)
+makeDistributionPlot(prior_adult,"black",ann=false)
+makeDistributionPlot!(prior_kid,"red",ann=false)
+makeDistributionPlot!(prior_A5,"green",ann=true)
+Plots.savefig(projDir*"/figs/priors_compA5_Stan.pdf")
+
+
+
 ######################## Task 4, posterior prediction #############
 #### a) knowing that it is a child
 
@@ -523,8 +581,8 @@ zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(
 y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
 # Compare in plots:
 makeDistributionPlot(y_sim_unknown,"blue",ann=true)
-histogram!(y_sim_adult, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="black")
-histogram!(y_sim_kid, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="red")
+histogram!(y_sim_adult, bins=200, normalize=:pdf, alpha=0.15, linealpha=0.1, color="black")
+histogram!(y_sim_kid, bins=200, normalize=:pdf, alpha=0.15, linealpha=0.1, color="red")
 Plots.savefig(projDir*"/figs/PP_unknown_Stan.pdf")
 
 
@@ -538,8 +596,8 @@ idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the
 zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
 y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
 makeDistributionPlot(y_sim_unknown,"blue",ann=true)
-histogram!(y_sim_adult, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="black")
-histogram!(y_sim_kid, bins=100, normalize=:pdf, alpha=0.1, linealpha=0.1, color="red")
+histogram!(y_sim_adult, bins=200, normalize=:pdf, alpha=0.15, linealpha=0.1, color="black")
+histogram!(y_sim_kid, bins=200, normalize=:pdf, alpha=0.15, linealpha=0.1, color="red")
 plot!(ann=(1200,0.0025,"Kids: $(weight*100) %"),grid=false)
 Plots.savefig(projDir*"/figs/PP_unknown_fixed05_Stan.pdf")
 
