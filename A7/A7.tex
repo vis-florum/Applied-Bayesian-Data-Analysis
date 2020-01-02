@@ -1,0 +1,182 @@
+%%%%%%%%%%%%%%%% PREAMBLE %%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[top=3cm, bottom=3cm, left=2.5cm, right=2.5cm]{geometry}
+%\usepackage[top=0.5cm, bottom=0.5cm, left=0.5cm, right=0.5cm]{geometry}
+
+% Så att man kan använda konstiga tecken och bokstäver, tex åäö (dels så man kan skriva, dels så man kan outputta)
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% Använd english language ordbrytning
+\usepackage[english]{babel}
+
+% För matematiska formler o dyl
+\usepackage{mathtools}
+\usepackage{amssymb}
+\usepackage{amsmath}
+
+% For bold math vectors:
+\usepackage{bm}
+
+\usepackage[switch, mathlines]{lineno}
+\modulolinenumbers[2]
+
+
+\begin{document}
+
+\section*{Model}
+The \textbf{inputs} are the real, continuous variable $z_x$, which standardises the increasing attempt numbers, $x$, of each individual and the dichotomous variable $K_j$ which indicates whether the individual is a kid:
+\begin{linenomath}
+\begin{align}
+z_x = \frac{x - \bar{x}}{\hat{\sigma}_x}, \hspace*{2cm}
+K_j =
+\begin{cases}
+\displaystyle
+1 & \text{if } j \text{ is a kid}\\ %\vspace*{.6em} \\
+\displaystyle
+0 & \text{else}
+\end{cases}
+\end{align}
+\end{linenomath}
+where $\bar{x}$ is the sample mean and $\hat{\sigma}_x$ the sample standard deviation of $x$.
+
+The \textbf{outputs} are the reaction times, $y_j$, for each individual $j$, given the inputs. For our model, we use the $\log(y_j)$ and work with standardised values, $z_{\log(y_j)}$:
+\begin{linenomath}
+\begin{align}\label{eq:stand_y}
+z_{\log(y_j)} = \frac{\log(y_j) - \overline{\log(y_j)}}{\hat{\sigma}_{\log(y_j)}}
+\end{align}
+\end{linenomath}
+
+The applied Bayesian \textbf{hierarchical model} expresses the probability of the output given the input and 9 parameters by redistributing the probability proportions as follows:
+\begin{align*}
+P(z_x, K_j, &\theta_{0_j}, \theta_{1_j}, \sigma, \mu_0, \varphi_0, \mu_1, \varphi_1, \tau_0, \tau_1 | z_{\log(y_j)}) \\
+	&\propto P(z_{\log(y_j)} | z_x, K_j, \theta_{0_j}, \theta_{1_j}, \sigma, \mu_0, \varphi_0, \mu_1, \varphi_1, \tau_0, \tau_1) \cdot
+	P(\theta_{0_j}, \theta_{1_j}, \sigma, \mu_0, \varphi_0, \mu_1, \varphi_1, \tau_0, \tau_1) \\
+	&\propto P(z_{\log(y_j)} | z_x, \theta_{0_j}, \theta_{1_j}, \sigma) 
+	\cdot P(\theta_{0_j} |  \mu_0, \varphi_0, \tau_0, K_j) 	
+	\cdot P(\theta_{1_j} |  \mu_1, \varphi_1, \tau_1, K_j) \cdot \\
+	&\hphantom{{}\propto\ } P(\sigma)
+	\cdot P(\mu_0) \cdot P(\mu_1)
+	\cdot P(\varphi_0) \cdot P(\varphi_1)
+	\cdot P(\tau_0) \cdot P(\tau_1)
+\end{align*}
+$K_j$ and $z_x$ are the outputs and have no priors.
+The joint posterior over all individuals can then be expressed as:
+\begin{align*}
+\prod_j^J
+P(z_x, K_j, &\theta_{0_j}, \theta_{1_j}, \cdots | z_{\log(y_j)}) 
+ 	\propto \prod_j^J
+	P(z_{\log(y_j)} | z_x, \theta_{0_j}, \theta_{1_j}, \sigma) 
+	\cdot P(\theta_{0_j} |  \mu_0, \varphi_0, \tau_0, K_j) 	
+	\cdot P(\theta_{1_j} |  \mu_1, \varphi_1, \tau_1, K_j) \cdots
+\end{align*}
+A graphical representation of the hierarchical model can be seen in Figure 2.
+
+The \textbf{core} of the model is the distribution of the data (i.e. the likelihood function) which models a regression line for each individual with a certain noise around it:
+\begin{align*}
+\boxed{z_{\log(y_j)} \sim \mathcal{N}(\theta_{0_j} + \theta_{1_j} \cdot z_x,\ \sigma^2)}
+\end{align*}
+The assumed shapes of the intermediate priors and pure (hyper-) priors are as follows:
+\begin{align*}
+\theta_{0_j} &\sim \mathcal{N}(\mu_0 + \varphi_0 \cdot K_j, \tau_0^2) \\
+\theta_{1_j} &\sim \mathcal{N}(\mu_1 + \varphi_1 \cdot K_j, \tau_1^2) \\
+\mu_0, \mu_1, \varphi_0, \varphi_1 &\sim \mathcal{U}(-\infty, + \infty) \\
+\sigma, \tau_0, \tau_1 &\sim \mathcal{U}\ ]0, + \infty)
+\end{align*}
+Note, that the priors in the first line above exclude 0.
+
+
+%\pagebreak
+\linenumbers
+\section*{Transformations}
+With the random variables $\Xi, \Theta, \Omega \sim \mathcal{N}(0, 1)$, we can rewrite the distributions as follows:
+\begin{linenomath}
+\begin{align*}
+z_{\log(y_j)} &= \theta_{0_j} + \theta_{1_j} \cdot z_x + \sigma \cdot \Xi \\
+\theta_{0_j} &= \mu_0 + \varphi_0 \cdot K_{j} + \tau_0 \cdot \Theta \\
+\theta_{1_j} &= \mu_1 + \varphi_1 \cdot K_{j} + \tau_1 \cdot \Omega \\
+\\
+z_{\log(y_j)} &= \mu_0 + \varphi_0 \cdot K_{j} + \tau_0 \cdot \Theta +
+                 (\mu_1 + \varphi_1 \cdot K_{j} + \tau_1 \cdot \Omega) z_x +
+                 \sigma \cdot \Xi
+\end{align*}
+\end{linenomath}
+Assuming independence, we can convolute the addition of the random variables $\Xi$, $\Theta$ and $\Omega$ and merge them into a single one which we call again $\Xi$:
+\begin{linenomath}
+\begin{align*}
+z_{\log(y_j)} &= \mu_0 + \varphi_0 \cdot K_{j} + \sqrt{\sigma^2 + \tau_0^2 + \tau_1^2 z_x^2} \cdot \Xi + (\mu_1 + \varphi_1 \cdot K_{j}) z_x 
+\end{align*}
+\end{linenomath}
+De-standardising from Equation \ref{eq:stand_y} yields:
+\begin{linenomath}
+\begin{align*}
+\log(y_j) &= 
+	\underbrace{\hat{\sigma}_y \mu_0 + \overline{\log(y_j)}}_{\mu_{0,\text{unsc}}} +
+	\underbrace{\hat{\sigma}_y \varphi_0}_{\varphi_{0,{\text{unsc}}}} \cdot K_{j} + 
+	\sqrt{\underbrace{\hat{\sigma}_y^2 \sigma^2}_{\sigma^2_\text{unsc}} +
+		  \underbrace{\hat{\sigma}_y^2 \tau_0^2}_{\tau_{0,\text{unsc}}^2} + 
+  		  \underbrace{\hat{\sigma}_y^2 \tau_1^2}_{\tau_{1,\text{unsc}}^2} z_x^2} \cdot \Xi
+	+ (\underbrace{\hat{\sigma}_y \mu_1}_{\mu_{1,\text{unsc}}}
+	  + \underbrace{\hat{\sigma}_y \varphi_1}_{\varphi_{1,{\text{unsc}}}} \cdot K_{j}) z_x 
+\end{align*}
+\end{linenomath}
+and therefore,
+\begin{linenomath}
+\begin{align*}
+\log(y_j) \sim 
+	\mathcal{N}&(\mu_{0,\text{unsc}} + \varphi_{0,\text{unsc}} \cdot K_j + (\mu_{1,\text{unsc}} + \varphi_{1,\text{unsc}} \cdot K_{j}) z_x , \ \ 
+				\sigma^2_\text{unsc} + \tau^2_{0,\text{unsc}} + \tau^2_{1,\text{unsc}} z_x^2) \\
+%y_j &=
+%	e^{\mu_{0,\text{unscaled}}} e^{K_j \varphi_{\text{unscaled}}}
+%	e^{X \cdot \sqrt{\sigma^2_\text{unscaled} + \tau^2_\text{unscaled}}} \\
+% \\
+y_j \sim logNorm&(\mu_{0,\text{unsc}} + \varphi_{0,\text{unsc}} \cdot K_j + (\mu_{1,\text{unsc}} + \varphi_{1,\text{unsc}} \cdot K_{j}) z_x , \ \ 
+				\sigma^2_\text{unsc} + \tau^2_{0,\text{unsc}} + \tau^2_{1,\text{unsc}} z_x^2)
+\end{align*}
+\end{linenomath}
+The expected value at the \textbf{group} level is thus (from Wiki about log-normal):
+\begin{linenomath}
+\begin{align*}
+E[y_j] &= 
+	e^{\mu_{0,\text{unsc}} + \varphi_{0,\text{unsc}} \cdot K_j +
+	  (\mu_{1,\text{unsc}} + \varphi_{1,\text{unsc}} \cdot K_{j}) z_x  +
+       \frac{\sigma^2_\text{unsc}}{2} + \frac{\tau^2_{0,\text{unsc}}}{2} +
+	   \frac{\tau^2_{1,\text{unsc}} z_x^2}{2}} \\
+&=
+	e^{\mu_{0,\text{unsc}} + \varphi_{0,\text{unsc}} \cdot K_j +
+       \frac{\sigma^2_\text{unsc}}{2} + \frac{\tau^2_{0,\text{unsc}}}{2}} \cdot
+    \underbrace{
+	e^{(\mu_{1,\text{unsc}} + \varphi_{1,\text{unsc}} \cdot K_{j}) z_x  +
+       \frac{\tau^2_{1,\text{unsc}} z_x^2}{2}}}_{\text{effect of increasing attempts}} \\
+&=
+	\underbrace{e^{\varphi_{0,\text{unsc}} \cdot K_j}}_{\text{child-effect}} \
+	e^{\mu_{0,\text{unsc}} +
+       \frac{\sigma^2_\text{unsc}}{2} + \frac{\tau^2_{0,\text{unsc}}}{2}} \cdot
+    \underbrace{
+   	e^{\varphi_{1,\text{unsc}} \cdot K_{j} z_x  + \frac{\tau^2_{1,\text{unsc}} z_x^2}{2}}}_{\text{child-effect}}
+	e^{\mu_{1,\text{unsc}} z_x}
+\end{align*}
+\end{linenomath}
+At the \textbf{individual} level, the hyper-priors just disappear:
+\begin{linenomath}
+\begin{align*}
+E[y_j] &= 
+	e^{\theta_{0_j,\text{unsc}} + \theta_{1_j,\text{unsc}} z_x +
+	     \frac{\sigma^2_\text{unsc}}{2}} \\
+&=
+	\underbrace{e^{\theta_{1_j,\text{unsc}} z_x}}_{\mathclap{\text{effect of increasing attempts}}} \
+	e^{\theta_{0_j,\text{unsc}} +
+	     \frac{\sigma^2_\text{unsc}}{2}}
+\end{align*}
+\end{linenomath}
+where
+\begin{linenomath}
+\begin{align*}
+\theta_{0_j,\text{unsc}} &= \hat{\sigma}_y \theta_{0_j} + \overline{\log(y_j)} \\
+\theta_{1_j,\text{unsc}} &= \hat{\sigma}_y \theta_{1_j}
+\end{align*}
+\end{linenomath}
+The multiplicative effect of being a kid acts only on the group level, but the effect of increasing attempts acts on the individual and group level.
+
+\end{document}
