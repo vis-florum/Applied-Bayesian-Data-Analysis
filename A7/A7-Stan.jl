@@ -361,11 +361,14 @@ logy = log.(y)
 logMean = mean(logy)
 logStd = std(logy)
 
+global trainMean = mean(x)
+global trainStd = std(x)
+
 # Mean-centre and scale each element:
 zlogy = (logy .- logMean) ./ logStd;
 
 # Standardise training data:
-zx = (x .- mean(x)) ./ std(x);
+zx = (x .- trainMean) ./ trainStd;
 
 
 ################################################################################
@@ -388,26 +391,40 @@ data {
     real zlogy[I];          // (transformed) output: reaction time
 }
 parameters {
-    real theta0[J];          // intercept for each individual
-    real theta1[J];          // slope for each individual
+//    real theta0[J];          // intercept for each individual
+//    real theta1[J];          // slope for each individual
+    real eta0[J];          // helper for reparametrisation
+    real eta1[J];          // helper for reparametrisation
     real<lower=0.000001> sigma;    // variation around regression line (same for all)
     real mu0;               // mean for the intercept at group level
     real phi0;              // additive term for the intercept if being a kid
     real mu1;               // mean for the slope at the group level
     real phi1;              // additive term for the slope if being a kid
-    real<lower=0.000001> tau0;     // std of the group intercept (same for all)
-    real<lower=0.00000001> tau1;   // std of the group slope (same for all)
+    real tau0;     // std of the group intercept (same for all)
+    real tau1;   // std of the group slope (same for all)
 }
-transformed parameters { // no transformed variables to use
-// how to transform here?
+transformed parameters {
+    real theta0[J];          // intercept for each individual
+    real theta1[J];          // slope for each individual
+    for (j in 1:J) {
+        theta0[j] = mu0 + phi0*K[j] + tau0 * eta0[j];
+        theta1[j] = mu1 + phi1*K[j] + tau1 * eta1[j];
+    }
 }
 model {
+    tau0 ~ uniform(0,10000);
+    tau1 ~ uniform(0,10000);
     for (i in 1:I)
         zlogy[i] ~ normal(theta0[ID[i]] + theta1[ID[i]]*zx[i], sigma);
     for (j in 1:J) {
-        theta0[j] ~ normal(mu0 + phi0*K[j], tau0);
-        theta1[j] ~ normal(mu1 + phi1*K[j], tau1);
+        eta0[j] ~ normal(0, 1);
+        eta1[j] ~ normal(0, 1);
     }
+
+    //for (j in 1:J) {
+    //    theta0[j] ~ normal(mu0 + phi0*K[j], tau0);
+    //    theta1[j] ~ normal(mu1 + phi1*K[j], tau1);
+    //}
     // no prior is equivalent to a uniform prior
     // however this is an <<improper>> prior and can lead to problems
 }
@@ -473,7 +490,7 @@ end
 μ_1 = 1.0 * chn.value[Axis{:var}("mu1")][:]
 ϕ_0 = 1.0 * chn.value[Axis{:var}("phi0")][:]   # all chains in one sausage
 ϕ_1 = 1.0 * chn.value[Axis{:var}("phi1")][:]
-σ = 1.0 * chn.value[Axis{:var}("sigma")][:]
+σ   = 1.0 * chn.value[Axis{:var}("sigma")][:]
 τ_0 = 1.0 * chn.value[Axis{:var}("tau0")][:]
 τ_1 = 1.0 * chn.value[Axis{:var}("tau1")][:]
 
@@ -521,27 +538,71 @@ end
 #####
 
 #####
-# Un-scale and un-mean-centre:
-θ_unscaled = θ .* logStd .+ logMean
-# adults:
-μ_0_unscaled = (μ .+ 0) .* logStd .+ logMean
-# kids only:
-μ_ϕ_unscaled = (μ .+ ϕ) .* logStd .+ logMean
-ϕ_unscaled = ϕ .* logStd
+# Un-standardise:
+# Individual level:
+global θ_0_unscaled = θ_0 .* logStd .+ logMean
+global θ_1_unscaled = θ_1 .* logStd
 
-σ_unscaled = σ .* logStd
-τ_unscaled = τ .* logStd
+global σ_unscaled = σ .* logStd
+
+# Group level:
+global μ_0_unscaled = μ_0 .* logStd .+ logMean
+global ϕ_0_unscaled = ϕ_0 .* logStd
+
+global μ_1_unscaled = μ_1 .* logStd
+global ϕ_1_unscaled = ϕ_1 .* logStd
+
+global τ_0_unscaled = τ_0 .* logStd
+global τ_1_unscaled = τ_1 .* logStd
 
 #####
-# Get into non-log space:
-ϕ_unscaled_unLog = exp.(ϕ_unscaled)
-θ_unscaled_unLog = exp.(θ_unscaled .+ 0.5 .* repeat(σ_unscaled,1,J).^2);
-μ_0_trans_unLog = exp.(μ_0_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);    # adults
-μ_ϕ_trans_unLog = exp.(μ_0_unscaled .+ ϕ_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);  # kids
+# Get into non-log space (generates function of input):
+# Individual level:
+function E_y_ind(x,j)
+    # transform to zx:
+    zx = (x - trainMean) / trainStd
+    return exp.(θ_0_unscaled[:,j] .+
+                θ_1_unscaled[:,j] .* zx .+
+                0.5 .* σ_unscaled.^2);
+end
+
+function E_y_ind2(x,j)
+    # transform to zx:
+    zx = (x - trainMean) / trainStd
+    return exp.(θ_0[:,j] .+
+                θ_1[:,j] .* zx .+
+                0.5 .* σ.^2);
+end
+
+
+#ϕ_0_unscaled_unLog = exp.(ϕ_unscaled)
+
+#μ_0_trans_unLog = exp.(μ_0_unscaled .+
+#                  0.5 .* σ_unscaled.^2 .+
+#                  0.5 .* τ_0_unscaled.^2 .+
+#                  0.5 .* τ_1_unscaled.^2 * zx);
+#μ_ϕ_trans_unLog = exp.(μ_0_unscaled .+ ϕ_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);  # kids
 
 
 ################################################################################
 ############################# TASKS ############################################
+
+makeDistributionPlot(ϕ_1,"blue")
+
+makeDistributionPlot(τ_1,"blue")
+
+makeDistributionPlot(exp.(θ_1_unscaled[:,4]),"blue")
+
+#makeDistributionPlot(E_y_ind2(1,1),"blue")
+#makeDistributionPlot!(E_y_ind2(5,1),"red")
+
+makeDistributionPlot(E_y_ind(1,1),"blue")
+makeDistributionPlot!(E_y_ind(5,1),"red")
+
+attempts = range(0,22,length=100)
+
+out = mean.(E_y_ind.(attempts,4))
+plot!(attempts,out)
 
 ######################## Task 1 ####################################
 # Effect of being a kid:
