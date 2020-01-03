@@ -571,19 +571,12 @@ global τ_1_unscaled = logStd .* τ_1 .* trainMean ./ trainStd
 function E_y_ind(x,j)
     # transform to zx:
     #zx = (x - trainMean) / trainStd
-    return exp.(θ_0_unscaled[:,j] .+
+    logExpected = Array{Float64,1}(undef,N)
+    logExpected = exp.(θ_0_unscaled[:,j] .+
                 θ_1_unscaled[:,j] .* x .+
                 0.5 .* σ_unscaled.^2);
+    return logExpected
 end
-
-function E_y_ind2(x,j)
-    # transform to zx:
-    #zx = (x - trainMean) / trainStd
-    return exp.(θ_0[:,j] .+
-                θ_1[:,j] .* x .+
-                0.5 .* σ.^2);
-end
-
 
 #ϕ_0_unscaled_unLog = exp.(ϕ_unscaled)
 
@@ -593,6 +586,25 @@ end
 #                  0.5 .* τ_1_unscaled.^2 * zx);
 #μ_ϕ_trans_unLog = exp.(μ_0_unscaled .+ ϕ_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);  # kids
 
+function curveSwarm(nrCurves,j,N,α,subpl=0)
+    attempts = range(0,21,length=100)
+    curves = Array{Float64,2}(undef,N,nrCurves)
+
+    for (i, att) in enumerate(attempts)
+        curves[:,i] = E_y_ind(att,j)
+    end
+
+    if subpl > 0
+        plot(legend=false,ylims=[100,800],subplot=subpl)
+    end
+    randIdces = Int.(ceil.(rand(nrCurves).*N))
+
+    for i = 1:nrCurves
+        plot!(attempts,curves[randIdces[i],:],
+              color="blue",linealpha=α,subplot=subpl,
+              legend=false,ylims=[100,800])
+    end
+end
 
 ################################################################################
 ############################# TASKS ############################################
@@ -606,14 +618,36 @@ makeDistributionPlot(exp.(θ_1_unscaled[:,4]),"blue")
 #makeDistributionPlot(E_y_ind2(1,1),"blue")
 #makeDistributionPlot!(E_y_ind2(5,1),"red")
 
-makeDistributionPlot(E_y_ind2(1,3),"blue")
-makeDistributionPlot!(E_y_ind2(5,3),"red")
+makeDistributionPlot(E_y_ind(1,3),"blue")
+makeDistributionPlot!(E_y_ind(5,3),"red")
 plot!(xlims=[200,800])
 
-attempts = range(0,22,length=100)
+attempts = range(0,22,length=200)
 plot()
-out = mean.(E_y_ind.(attempts,4))
-plot!(attempts,out)
+curve_expected = mean.(E_y_ind.(attempts,4))
+plot!(attempts,curve_expected)
+
+curveSwarm(500,4,N,.15)
+Plots.savefig(projDir*"/test.pdf")
+
+
+plot(layout=(5, 7),size = (3000, 2000),legend=false)
+for i in 1:J
+    curveSwarm(200,i,N,.15,i)
+end
+plot!(xaxis=false,yaxis=false,grid=false,subplot=35)
+Plots.savefig(projDir*"/test.pdf")
+
+
+
+
+
+
+
+
+
+
+
 
 ######################## Task 1 ####################################
 # Effect of being a kid:
