@@ -497,32 +497,41 @@ end
 
 ##### RE-READ RESULTS IF CHAIN HAS ALREADY RUN
 # only for re-use purposes, please ignore!
-# using CSV
-#
-# ϕ = Array{Float64,1}(undef,N)
-# θ = Array{Float64,2}(undef,N,J)
-# μ = Array{Float64,1}(undef,N)
-# σ = Array{Float64,1}(undef,N)
-# τ = Array{Float64,1}(undef,N)
-#
-# for i in 1:noOfChains
-#     # subindices
-#     from = N_chain*(i-1) + 1
-#     to = N_chain*i
-#
-#     # read into a DataFrame:
-#     chain_csv = CSV.read(tmpDir*"/reactionTime-A6_samples_$i.csv"; comment="#", normalizenames=true)
-#
-#     θ_df = chain_csv[:,r"theta"]    # regex
-#     for j in 1:J
-#         θ[from:to,j] = θ_df[:,j]  # need to bring on array form, from data frame
-#     end
-#
-#     ϕ[from:to,:] = chain_csv[:, r"phi"][:,1]
-#     μ[from:to,:] = chain_csv[:, r"mu"][:,1]
-#     σ[from:to,:] = chain_csv[:, r"sigma"][:,1]
-#     τ[from:to,:] = chain_csv[:, r"tau"][:,1]
-# end
+using CSV
+
+θ_0 = Array{Float64,2}(undef,N,J)
+θ_1 = Array{Float64,2}(undef,N,J)
+μ_0 = Array{Float64,1}(undef,N)
+μ_1 = Array{Float64,1}(undef,N)
+ϕ_0 = Array{Float64,1}(undef,N)
+ϕ_1 = Array{Float64,1}(undef,N)
+σ   = Array{Float64,1}(undef,N)
+τ_0 = Array{Float64,1}(undef,N)
+τ_1 = Array{Float64,1}(undef,N)
+
+for i in 1:noOfChains
+    # subindices
+    from = N_chain*(i-1) + 1
+    to = N_chain*i
+
+    # read into a DataFrame:
+    chain_csv = CSV.read(tmpDir*"/reactionTime-A7_samples_$i.csv"; comment="#", normalizenames=true)
+
+    θ_0_df = chain_csv[:,r"theta0"]    # regex
+    θ_1_df = chain_csv[:,r"theta1"]
+    for j in 1:J
+        θ_0[from:to,j] = θ_0_df[:,j]  # need to bring on array form, from data frame
+        θ_1[from:to,j] = θ_1_df[:,j]  # need to bring on array form, from data frame
+    end
+
+    μ_0[from:to,:] = chain_csv[:, r"mu0"][:,1]
+    μ_1[from:to,:] = chain_csv[:, r"mu1"][:,1]
+    ϕ_0[from:to,:] = chain_csv[:, r"phi0"][:,1]
+    ϕ_1[from:to,:] = chain_csv[:, r"phi1"][:,1]
+    σ[from:to,:]   = chain_csv[:, r"sigma"][:,1]
+    τ_0[from:to,:] = chain_csv[:, r"tau0"][:,1]
+    τ_1[from:to,:] = chain_csv[:, r"tau1"][:,1]
+end
 ######
 
 ##### RE-READ RESULTS FROM OLD ASSIGNMENT
@@ -540,37 +549,38 @@ end
 #####
 # Un-standardise:
 # Individual level:
-global θ_0_unscaled = θ_0 .* logStd .+ logMean
-global θ_1_unscaled = θ_1 .* logStd
+global θ_0_unscaled = logStd.*θ_0 .- logStd.*θ_1.*trainMean./trainStd .+ logMean
+global θ_1_unscaled = logStd.*θ_1./trainStd
 
 global σ_unscaled = σ .* logStd
 
-# Group level:
-global μ_0_unscaled = μ_0 .* logStd .+ logMean
-global ϕ_0_unscaled = ϕ_0 .* logStd
+# Group level (maybe not needed)
+global μ_0_unscaled = logStd.*μ_0 .- logStd.*μ_1.*trainMean./trainStd .+ logMean
+global ϕ_0_unscaled = logStd.*(ϕ_0 .- ϕ_1.*trainMean./trainStd)
 
-global μ_1_unscaled = μ_1 .* logStd
-global ϕ_1_unscaled = ϕ_1 .* logStd
+global μ_1_unscaled = logStd.*μ_1./trainStd
+global ϕ_1_unscaled = logStd.*ϕ_1./trainStd
 
-global τ_0_unscaled = τ_0 .* logStd
-global τ_1_unscaled = τ_1 .* logStd
+global τ_0_unscaled = logStd.* sqrt.(τ_0.^2 .+ τ_1.^2 .* trainMean.^2 ./ trainStd.^2)
+global τ_tilde_1_unscaled = sqrt.(2 .* logStd.^2 .* τ_1.^2 .* trainMean ./ trainStd.^2)
+global τ_1_unscaled = logStd .* τ_1 .* trainMean ./ trainStd
 
 #####
 # Get into non-log space (generates function of input):
 # Individual level:
 function E_y_ind(x,j)
     # transform to zx:
-    zx = (x - trainMean) / trainStd
+    #zx = (x - trainMean) / trainStd
     return exp.(θ_0_unscaled[:,j] .+
-                θ_1_unscaled[:,j] .* zx .+
+                θ_1_unscaled[:,j] .* x .+
                 0.5 .* σ_unscaled.^2);
 end
 
 function E_y_ind2(x,j)
     # transform to zx:
-    zx = (x - trainMean) / trainStd
+    #zx = (x - trainMean) / trainStd
     return exp.(θ_0[:,j] .+
-                θ_1[:,j] .* zx .+
+                θ_1[:,j] .* x .+
                 0.5 .* σ.^2);
 end
 
@@ -596,11 +606,12 @@ makeDistributionPlot(exp.(θ_1_unscaled[:,4]),"blue")
 #makeDistributionPlot(E_y_ind2(1,1),"blue")
 #makeDistributionPlot!(E_y_ind2(5,1),"red")
 
-makeDistributionPlot(E_y_ind(1,1),"blue")
-makeDistributionPlot!(E_y_ind(5,1),"red")
+makeDistributionPlot(E_y_ind2(1,3),"blue")
+makeDistributionPlot!(E_y_ind2(5,3),"red")
+plot!(xlims=[200,800])
 
 attempts = range(0,22,length=100)
-
+plot()
 out = mean.(E_y_ind.(attempts,4))
 plot!(attempts,out)
 
