@@ -55,7 +55,7 @@ ind = [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 5, 5, 5, 5,
    34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34];
 
 # Indicator for each individual j whether he/she is a child or not:
-child_j = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
+global child_j = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
            0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
 
 # Indicator for each observation i whether it comes from a child or not:
@@ -571,232 +571,155 @@ global τ_1_unscaled = logStd .* τ_1 .* trainMean ./ trainStd
 function E_y_ind(x,j)
     # transform to zx:
     #zx = (x - trainMean) / trainStd
-    logExpected = Array{Float64,1}(undef,N)
-    logExpected = exp.(θ_0_unscaled[:,j] .+
+    unlogExpected = Array{Float64,1}(undef,N)
+    unlogExpected = exp.(θ_0_unscaled[:,j] .+
                 θ_1_unscaled[:,j] .* x .+
                 0.5 .* σ_unscaled.^2);
-    return logExpected
+    return unlogExpected
 end
 
-#ϕ_0_unscaled_unLog = exp.(ϕ_unscaled)
+function E_y_group(x,isKid)
+    # isKid is either 1 or 0
+    # transform to zx:
+    #zx = (x - trainMean) / trainStd
+    unlogExpected = Array{Float64,1}(undef,N)
+    unlogExpected = exp.(μ_0_unscaled + ϕ_0_unscaled .* isKid .+
+                    (μ_1_unscaled .+ ϕ_1_unscaled .* isKid) .* x .+
+                    0.5 .* (σ_unscaled.^2 .+ τ_0_unscaled.^2 .-
+                            τ_tilde_1_unscaled.^2 .* x .+ τ_1_unscaled.^2 .* x^2))
+    return unlogExpected
+end
 
-#μ_0_trans_unLog = exp.(μ_0_unscaled .+
-#                  0.5 .* σ_unscaled.^2 .+
-#                  0.5 .* τ_0_unscaled.^2 .+
-#                  0.5 .* τ_1_unscaled.^2 * zx);
-#μ_ϕ_trans_unLog = exp.(μ_0_unscaled .+ ϕ_unscaled .+ 0.5 .* σ_unscaled.^2 .+ 0.5 .* τ_unscaled.^2);  # kids
 
 function curveSwarm(nrCurves,j,N,α,subpl=0)
-    attempts = range(0,21,length=100)
-    curves = Array{Float64,2}(undef,N,nrCurves)
+    checkpoints = 100
+    attempts = range(0,21,length=checkpoints)
+    curves = Array{Float64,2}(undef,N,checkpoints)
 
     for (i, att) in enumerate(attempts)
         curves[:,i] = E_y_ind(att,j)
     end
 
     if subpl > 0
-        plot(legend=false,ylims=[100,800],subplot=subpl)
+        plot!(legend=false,ylims=[100,800],subplot=subpl)
+    else
+        plot(legend=false,ylims=[100,800])
     end
     randIdces = Int.(ceil.(rand(nrCurves).*N))
 
     for i = 1:nrCurves
-        plot!(attempts,curves[randIdces[i],:],
-              color="blue",linealpha=α,subplot=subpl,
-              legend=false,ylims=[100,800])
+        if subpl > 0
+            plot!(attempts,curves[randIdces[i],:],
+                  color="blue",linealpha=α,subplot=subpl,
+                  legend=false,ylims=[100,800])
+        else
+            plot!(attempts,curves[randIdces[i],:],
+                  color="blue",linealpha=α,
+                  legend=false,ylims=[100,800])
+        end
+    end
+end
+
+function curveSwarmGroup(nrCurves,isKid,N,α,subpl=0)
+    checkpoints = 100
+    attempts = range(0,21,length=checkpoints)
+    curves = Array{Float64,2}(undef,N,checkpoints)
+
+    for (i, att) in enumerate(attempts)
+        curves[:,i] = E_y_group(att,isKid)
+    end
+
+    #if subpl > 0
+    #    plot(legend=false,ylims=[100,800],subplot=subpl)
+    #else
+    #    plot(legend=false,ylims=[100,800])
+    #end
+    randIdces = Int.(ceil.(rand(nrCurves).*N))
+
+    for i = 1:nrCurves
+        if subpl > 0
+            plot!(attempts,curves[randIdces[i],:],
+                  color=RGB(isKid,0,0),linealpha=α,subplot=subpl,
+                  legend=false,ylims=[100,800])
+        else
+            plot!(attempts,curves[randIdces[i],:],
+                  color=RGB(isKid,0,0),linealpha=α,
+                  legend=false,ylims=[100,800])
+        end
     end
 end
 
 ################################################################################
 ############################# TASKS ############################################
 
-makeDistributionPlot(ϕ_1,"blue")
+##### Task 3
+for j in [1,3,4]
+    ### Diagnostics to compare to Jesper:
+    makeDistributionPlot(exp.(θ_1_unscaled[:,j]),"blue")
+    plot!(xlabel="exp(theta_1[$j])")
+    Plots.savefig(projDir*"/figs/th1$j-Stan.pdf")
 
-makeDistributionPlot(τ_1,"blue")
+    ### Expected reaction times:
+    makeDistributionPlot(E_y_ind(1,j),"blue")
+    makeDistributionPlot!(E_y_ind(5,j),"red")
+    plot!(xlims=[200,800],grid=false,xlabel="E[y]-ind$j")
+    Plots.savefig(projDir*"/figs/times-$j-Stan.pdf")
 
-makeDistributionPlot(exp.(θ_1_unscaled[:,4]),"blue")
-
-#makeDistributionPlot(E_y_ind2(1,1),"blue")
-#makeDistributionPlot!(E_y_ind2(5,1),"red")
-
-makeDistributionPlot(E_y_ind(1,3),"blue")
-makeDistributionPlot!(E_y_ind(5,3),"red")
-plot!(xlims=[200,800])
-
-attempts = range(0,22,length=200)
-plot()
-curve_expected = mean.(E_y_ind.(attempts,4))
-plot!(attempts,curve_expected)
-
-curveSwarm(500,4,N,.15)
-Plots.savefig(projDir*"/test.pdf")
-
-
-plot(layout=(5, 7),size = (3000, 2000),legend=false)
-for i in 1:J
-    curveSwarm(200,i,N,.15,i)
+    ### Credible regression lines:
+    curveSwarm(200,j,N,.15)
+    col = RGB(child_j[j],0,0)
+    scatter!(1:1:sum(ind.==j),y[ind.==j],
+        markersize=10,markercolor=col,markerstrokecolor=col)
+    plot!(grid=false,xlabel="attempt nr",ylabel="reaction time")
+    Plots.savefig(projDir*"/figs/swarm-$j-Stan.pdf")
 end
-plot!(xaxis=false,yaxis=false,grid=false,subplot=35)
-Plots.savefig(projDir*"/test.pdf")
 
 
-
-
-
-
-
-
-
-
-
-
-######################## Task 1 ####################################
-# Effect of being a kid:
-makeDistributionPlot(ϕ, "orange")
-Plots.savefig(projDir*"/figs/phi_Stan.pdf")
-makeDistributionPlot(ϕ_unscaled, "orange")
-Plots.savefig(projDir*"/figs/phi_unscaled_Stan.pdf")
-
-makeDistributionPlot(ϕ_unscaled_unLog, "orange")
-Plots.savefig(projDir*"/figs/phi_unscaled_nonlog_Stan.pdf")
-
-
-######################## Task 2 #############
-makeDistributionPlot(τ,"blue")
-makeDistributionPlot!(τ_A5,"purple")
-Plots.savefig(projDir*"/figs/tau_Stan.pdf")
-
-makeDistributionPlot(τ_unscaled, "blue")
-makeDistributionPlot!(τ_A5_unscaled,"purple")
-Plots.savefig(projDir*"/figs/tau_unscaled_Stan.pdf")
-
-
-######################## Task 3, Priors of expected log reaction #############
-# prior for theta was
-# theta[j] ~ normal(mu + phi*ISKID[j],tau)
-
-prior_adult = mean(μ_0_unscaled) .+ mean(τ_unscaled) .* randn(N)
-prior_kid = mean(μ_0_unscaled) .+ mean(ϕ_unscaled) .+ mean(τ_unscaled) .* randn(N)
-makeDistributionPlot(prior_adult,"black")
-makeDistributionPlot!(prior_kid,"red")
-Plots.savefig(projDir*"/figs/priors_Stan.pdf")
-
-# Logarithmic sample means
-θ_mean_unscaled = zeros(J)
+### All Regression lines:
+plot(layout=(4, 9),size=(1500, 1000),
+     legend=false,grid=false,xaxis=false,yaxis=false)
 for j in 1:J
-    θ_mean_unscaled[j] = mean(logy[ind .== j])
-end
-
-#%% Plot into one figure
-# Get ordered indices:
-sIdx = sortperm(θ_mean_unscaled)
-
-plt = makeDistributionPlot(prior_adult,"black",ann=false)
-makeDistributionPlot!(prior_kid,"red",ann=false)
-top = 1.6;
-for i in 1:J
-    j = sIdx[i]
-    if child_j[j] == 1
-        color = "red"
+    curveSwarm(200,j,N,.15,j)
+    if (j-1)%9==0
+        myax=true
     else
-        color = "black"
+        myax=false
     end
-    makeDistributionPlot!(θ_unscaled[:,j],color,ann=false,offset=i*top/J,scale=1/100)
-
+    col = RGB(child_j[j],0,0)
+    scatter!(1:1:sum(ind.==j),y[ind.==j],
+        markersize=4,markercolor=col,markerstrokecolor=col,
+        subplot=j, ann=(12,700,"j = $j"),xaxis=true,yaxis=myax,
+        framestyle=:axes)
 end
-plt
-
-Plots.savefig(projDir*"/figs/priors_postOverlay_Stan.pdf")
+Plots.savefig(projDir*"/figs/allcurves-Stan.pdf")
 
 
-### Compare to old prior
-prior_A5 = mean(μ_A5_unscaled) .+ mean(τ_A5_unscaled) .* randn(N)
-makeDistributionPlot(prior_adult,"black",ann=false)
-makeDistributionPlot!(prior_kid,"red",ann=false)
-makeDistributionPlot!(prior_A5,"green",ann=true)
-Plots.savefig(projDir*"/figs/priors_compA5_Stan.pdf")
+##### Diagnostics to compare to Jesper:
+makeDistributionPlot(τ_0,"black")
+Plots.savefig(projDir*"/figs/tau0-Stan.pdf")
+makeDistributionPlot(τ_0_unscaled,"black")
+Plots.savefig(projDir*"/figs/tau0-unsc-Stan.pdf")
+
+makeDistributionPlot(σ,"black")
+Plots.savefig(projDir*"/figs/sigma-Stan.pdf")
+makeDistributionPlot(σ_unscaled,"black")
+Plots.savefig(projDir*"/figs/sigma-unsc-Stan.pdf")
 
 
+##### Extra
+makeDistributionPlot(exp.(ϕ_1_unscaled .* 1),"black")
+makeDistributionPlot(μ_1,"black")
 
-######################## Task 4, posterior prediction #############
-#### a) knowing that it is a child
+##### Swarm of the groups
+attempts = range(0,22,length=200)
+curve_mean_adult = mean.(E_y_group.(attempts,0))
+curve_mean_kid = mean.(E_y_group.(attempts,1))
 
-# Posterior predictive sampling:
-idx = Int.(ceil.(rand(N).*N))   # choose random indices which will pick from the simulated posterior
-# Sample zlogy according to the model:
-zlogy_sim_adult = μ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
-zlogy_sim_kid = μ[idx] .+ ϕ[idx] .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
-# Transform to non-standardised and non-log:
-y_sim_adult = exp.(zlogy_sim_adult .* logStd .+ logMean)
-y_sim_kid = exp.(zlogy_sim_kid .* logStd .+ logMean)
-
-makeDistributionPlot(y_sim_adult,"black",ann=true)
-makeDistributionPlot!(y_sim_kid,"red",ann=true)
-Plots.savefig(projDir*"/figs/PP_known_Stan.pdf")
-
-##############
-#### b) not knowing that it is a child
-# assuming a prior of equally likely to be adult or child (beta(1,1))
-# then add a likelihood corresponding to a bernoulli processs, with number of
-# heads equvivalent to number of kids among all individuals
-# the posterior probability of having the amount of childs among
-# our total individuals is given by a bernoulli process with a beta
-# with parameters a=b=1, N = # of individuals, z = # of kids
-
-nr_kids = sum(child_j)  # number of heads
-a = nr_kids + 1         # head (kid) count here
-b = J - nr_kids + 1     # non-heads (adults)
-postBeingKid = rand(Beta(a,b),N)
-areKids = postBeingKid .>= rand(N)  # only those who make it over the threshold
-
-# Posterior predictive sampling
-idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
-zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
-y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
-# Compare in plots:
-makeDistributionPlot(y_sim_unknown,"blue",ann=true)
-histogram!(y_sim_adult, bins=200, normalize=:pdf, alpha=0.15, linealpha=0.1, color="black")
-histogram!(y_sim_kid, bins=200, normalize=:pdf, alpha=0.15, linealpha=0.1, color="red")
-Plots.savefig(projDir*"/figs/PP_unknown_Stan.pdf")
-
-
-##############
-#### b-Version 2) not knowing that it is a child, set a fixed fraction
-# using fraction 0.5
-weight = 0.5
-postBeingKid = weight
-areKids = postBeingKid .>= rand(N)
-idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
-zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
-y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
-makeDistributionPlot(y_sim_unknown,"blue",ann=true)
-histogram!(y_sim_adult, bins=200, normalize=:pdf, alpha=0.15, linealpha=0.1, color="black")
-histogram!(y_sim_kid, bins=200, normalize=:pdf, alpha=0.15, linealpha=0.1, color="red")
-plot!(ann=(1200,0.0025,"Kids: $(weight*100) %"),grid=false)
-Plots.savefig(projDir*"/figs/PP_unknown_fixed05_Stan.pdf")
-
-
-
-#cur_colors = get_color_palette(:auto, plot_color(:white), 11)
-# Limits for the figure
-myXlims = (50,1200)
-#myYlims = (0,0.006)
-
-plt = StatsPlots.plot(size = (800, 1600),xlims=myXlims)
-
-# Try various fixed ratios:
-for (i, weight) in enumerate(0:.1:1)
-    postBeingKid = weight
-    areKids = postBeingKid .>= rand(N)
-    idx = Int.(ceil.(rand(N).*N))   # choose a random index which will pick from the simulated posterior
-    zlogy_sim_unknown = μ[idx] .+ ϕ[idx] .* areKids .+ randn(N).*τ[idx] .+ randn(N).*σ[idx]
-    y_sim_unknown = exp.(zlogy_sim_unknown .* logStd .+ logMean)
-
-    makeDistributionPlot!(y_sim_unknown,"blue",ann=false,offset=(i-1)*0.006,scale=1.0)
-    makeDistributionPlot!(y_sim_adult,"black",ann=false,offset=(i-1)*0.006,scale=1.0)
-    makeDistributionPlot!(y_sim_kid,"red",ann=false,offset=(i-1)*0.006,scale=1.0)
-    plot!(ann=(myXlims[2]-200,(i-1)*0.006+0.003,"Kids: $(weight*100) %"),grid=false,yticks=false)
-end
-# Show plot
-plt
-
-Plots.savefig(projDir*"/figs/CompMixture_Stan.pdf")
+plot(attempts,curve_mean_adult,
+    color=:black,ylims=[100,800],linewidth=8,linealpha=0.6)
+plot!(attempts,curve_mean_kid,
+      color=:red,ylims=[100,800],linewidth=8,linealpha=0.6)
+curveSwarmGroup(200,0,N,.15)
+curveSwarmGroup(200,1,N,.15)
+plot!(grid=false,xlabel="attempt nr",ylabel="reaction time")
+Plots.savefig(projDir*"/figs/swarm-groups-Stan.pdf")
