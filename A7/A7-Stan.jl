@@ -5,6 +5,7 @@ using AxisArrays
 using StatsBase
 using Random
 using Distributions
+using CSV
 
 ##### Some local setups
 # If run from command line externally:
@@ -534,16 +535,6 @@ for i in 1:noOfChains
 end
 ######
 
-diagnostics_csv = CSV.read(tmpDir*"/reactionTime-A7_summary.csv"; comment="#", normalizenames=true)
-
-#diagnostics_csv[:, :name]
-#diagnostics_csv[:, :N_Eff]
-# only keep the names and NEff without underscore:
-diagnostics_csv = diagnostics_csv[[occursin(r"^((?!__).)*$", elementname) for elementname in diagnostics_csv[:, :name]], [:name, :N_Eff]]
-for i = 1:size(diagnostics_csv,1)
-    println("N_eff of ",diagnostics_csv[i,1]," = ",diagnostics_csv[i,2])
-end
-
 
 ##### RE-READ RESULTS FROM OLD ASSIGNMENT
 # using CSV
@@ -736,6 +727,34 @@ plot!(grid=false,xlabel="attempt nr",ylabel="reaction time")
 Plots.savefig(projDir*"/figs/swarm-groups-Stan.pdf")
 
 ### Chain diagnostics
+diagnostics_csv = CSV.read(tmpDir*"/reactionTime-A7_summary.csv"; comment="#", normalizenames=true)
+# only keep the names and NEff without underscore:
+diagnostics_csv = diagnostics_csv[[occursin(r"^((?!__).)*$", elementname) for elementname in diagnostics_csv[:, :name]], [:name, :N_Eff]]
+diagnostics_csv_θ_0 = diagnostics_csv[[occursin(r"theta0.*", elementname) for elementname in diagnostics_csv[:, :name]], [:name, :N_Eff]]
+diagnostics_csv_θ_1 = diagnostics_csv[[occursin(r"theta1.*", elementname) for elementname in diagnostics_csv[:, :name]], [:name, :N_Eff]]
+diagnostics_csv_rest = diagnostics_csv[[occursin(r"^((?!theta).)*$", elementname) for elementname in diagnostics_csv[:, :name]], [:name, :N_Eff]]
+
+println("Max N_eff θ_0 is ",
+    diagnostics_csv_θ_1[diagnostics_csv_θ_0[:,:N_Eff] .>= maximum(diagnostics_csv_θ_0.N_Eff),:][1,1],
+    " = ",
+    diagnostics_csv_θ_1[diagnostics_csv_θ_0[:,:N_Eff] .>= maximum(diagnostics_csv_θ_0.N_Eff),:][1,2])
+println("Min N_eff θ_0 is ",
+    diagnostics_csv_θ_1[diagnostics_csv_θ_0[:,:N_Eff] .<= minimum(diagnostics_csv_θ_0.N_Eff),:][1,1],
+    " = ",
+    diagnostics_csv_θ_1[diagnostics_csv_θ_0[:,:N_Eff] .<= minimum(diagnostics_csv_θ_0.N_Eff),:][1,2])
+println("Max N_eff θ_1 is ",
+    diagnostics_csv_θ_1[diagnostics_csv_θ_1[:,:N_Eff] .>= maximum(diagnostics_csv_θ_1.N_Eff),:][1,1],
+    " = ",
+    diagnostics_csv_θ_1[diagnostics_csv_θ_1[:,:N_Eff] .>= maximum(diagnostics_csv_θ_1.N_Eff),:][1,2])
+println("Min N_eff θ_1 is ",
+    diagnostics_csv_θ_1[diagnostics_csv_θ_1[:,:N_Eff] .<= minimum(diagnostics_csv_θ_1.N_Eff),:][1,1],
+    " = ",
+    diagnostics_csv_θ_1[diagnostics_csv_θ_1[:,:N_Eff] .<= minimum(diagnostics_csv_θ_1.N_Eff),:][1,2])
+
+for i = 1:size(diagnostics_csv_rest,1)
+    println("N_eff of ",diagnostics_csv_rest[i,1]," = ",diagnostics_csv_rest[i,2])
+end
+
 using LaTeXStrings
 plot(1200:1800,θ_0[1200:1800,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
 Plots.savefig(projDir*"/figs/stuckChain-theta0-Stan.pdf")
