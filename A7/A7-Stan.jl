@@ -534,6 +534,17 @@ for i in 1:noOfChains
 end
 ######
 
+diagnostics_csv = CSV.read(tmpDir*"/reactionTime-A7_summary.csv"; comment="#", normalizenames=true)
+
+#diagnostics_csv[:, :name]
+#diagnostics_csv[:, :N_Eff]
+# only keep the names and NEff without underscore:
+diagnostics_csv = diagnostics_csv[[occursin(r"^((?!__).)*$", elementname) for elementname in diagnostics_csv[:, :name]], [:name, :N_Eff]]
+for i = 1:size(diagnostics_csv,1)
+    println("N_eff of ",diagnostics_csv[i,1]," = ",diagnostics_csv[i,2])
+end
+
+
 ##### RE-READ RESULTS FROM OLD ASSIGNMENT
 # using CSV
 #
@@ -723,3 +734,20 @@ curveSwarmGroup(200,0,N,.15)
 curveSwarmGroup(200,1,N,.15)
 plot!(grid=false,xlabel="attempt nr",ylabel="reaction time")
 Plots.savefig(projDir*"/figs/swarm-groups-Stan.pdf")
+
+### Chain diagnostics
+using LaTeXStrings
+plot(1200:1800,θ_0[1200:1800,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
+Plots.savefig(projDir*"/figs/stuckChain-theta0-Stan.pdf")
+
+plot(1200:1800,θ_1[1200:1800,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{1_j}")
+Plots.savefig(projDir*"/figs/stuckChain-theta1-Stan.pdf")
+
+plot(1200:1800,σ[1200:1800],legend=:topleft,xlabel="sample nr",label=L"\sigma")
+plot!(1200:1800,ϕ_0[1200:1800],xlabel="sample nr",label=L"\varphi_0")
+plot!(1200:1800,ϕ_1[1200:1800],xlabel="sample nr",label=L"\varphi_1")
+plot!(1200:1800,μ_0[1200:1800],xlabel="sample nr",label=L"\mu_0")
+plot!(1200:1800,μ_1[1200:1800],xlabel="sample nr",label=L"\mu_1")
+plot!(1200:1800,τ_0[1200:1800],xlabel="sample nr",label=L"\tau_0")
+plot!(1200:1800,τ_1[1200:1800],xlabel="sample nr",label=L"\tau_1")
+Plots.savefig(projDir*"/figs/stuckChain-restPars-Stan.pdf")
