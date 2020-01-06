@@ -13,7 +13,7 @@ using CSV
 
 # If run from Jupyter/Hydrogen, maybe change to suit you:
 projDir= "/lhome/johhub/Desktop/ABDA/A7"
-tmpDir = projDir*"/tmp"
+tmpDir = projDir*"/tmp1"
 
 #####
 #%% Input Data #################################################################
@@ -377,10 +377,10 @@ zx = (x .- trainMean) ./ trainStd;
 
 #%% Stan Setup #################################################################
 noOfChains = 4
-N = 10^5                # total number of samples
+N = 10^6                # total number of samples
 N_chain = convert(Int64, N / noOfChains)   # samples per chain
 keepchains = false
-burnIn = 10^3           # burn-in per chain
+burnIn = 10^4           # burn-in per chain
 
 modelString = "
 data {
@@ -392,8 +392,8 @@ data {
     real zlogy[I];          // (transformed) output: reaction time
 }
 parameters {
-//    real theta0[J];          // intercept for each individual
-//    real theta1[J];          // slope for each individual
+    //real theta0[J];      // intercept for each individual (without reparametrisation)
+    //real theta1[J];      // slope for each individual (without reparametrisation)
     real eta0[J];          // helper for reparametrisation
     real eta1[J];          // helper for reparametrisation
     real<lower=0.000001> sigma;    // variation around regression line (same for all)
@@ -401,20 +401,22 @@ parameters {
     real phi0;              // additive term for the intercept if being a kid
     real mu1;               // mean for the slope at the group level
     real phi1;              // additive term for the slope if being a kid
-    real tau0;     // std of the group intercept (same for all)
-    real tau1;   // std of the group slope (same for all)
+    real<lower=0> tau0;     // std of the group intercept (same for all individuals)
+    real<lower=0> tau1;     // std of the group slope (same for all)
 }
 transformed parameters {
-    real theta0[J];          // intercept for each individual
-    real theta1[J];          // slope for each individual
+    real theta0[J];          // intercept for each individual (reparametrised)
+    real theta1[J];          // slope for each individual (reparametrised)
     for (j in 1:J) {
         theta0[j] = mu0 + phi0*K[j] + tau0 * eta0[j];
         theta1[j] = mu1 + phi1*K[j] + tau1 * eta1[j];
     }
 }
 model {
-    tau0 ~ uniform(0,10000);
-    tau1 ~ uniform(0,10000);
+    // tau0 ~ uniform(0,10000);     // if these were used, chain got still stuck
+    // tau1 ~ uniform(0,10000);     // if these were used, chain got still stuck
+    // using improper prior for taus instead (using lower value in parameter block)
+
     for (i in 1:I)
         zlogy[i] ~ normal(theta0[ID[i]] + theta1[ID[i]]*zx[i], sigma);
     for (j in 1:J) {
@@ -422,18 +424,17 @@ model {
         eta1[j] ~ normal(0, 1);
     }
 
+    // Without reparametrisation (chain gets stuck):
     //for (j in 1:J) {
     //    theta0[j] ~ normal(mu0 + phi0*K[j], tau0);
     //    theta1[j] ~ normal(mu1 + phi1*K[j], tau1);
     //}
+
     // no prior is equivalent to a uniform prior
     // however this is an <<improper>> prior and can lead to problems
 }
 generated quantities {
-    // real zlogy_pred;
-    // real theta_pred;
-    // theta_pred = normal_rng(mu,tau);
-    // zlogy_pred = normal_rng(theta_pred,sigma);
+    // doing this in Julia instead
 }
 ";
 
@@ -469,8 +470,10 @@ rc, chn, cnames = stan(myModel,
                        diagnostics = false,
                        CmdStanDir = CMDSTAN_HOME);
 
-# takes for N=10^4 around 30 seconds.
+# Time measures for all together(preprocess, sample, postprocess):
+# N=10^4 around 30 seconds.
 # N=10^5 around 1.5 minutes
+# N=10^6 around 12.5 min, if no chain gets stuck
 
 
 ################################################################################
@@ -535,18 +538,6 @@ for i in 1:noOfChains
 end
 ######
 
-
-##### RE-READ RESULTS FROM OLD ASSIGNMENT
-# using CSV
-#
-# A5_import = CSV.read(projDir*"/export_tau_A5.csv"; header=false)
-# τ_A5 = A5_import[:,1]
-# τ_A5_unscaled = A5_import[:,2]
-#
-# A5_import = CSV.read(projDir*"/export_mu_A5.csv"; header=false)
-# μ_A5 = A5_import[:,1]
-# μ_A5_unscaled = A5_import[:,2]
-#####
 
 #####
 # Un-standardise:
@@ -710,7 +701,6 @@ Plots.savefig(projDir*"/figs/sigma-unsc-Stan.pdf")
 
 ##### Extra
 makeDistributionPlot(exp.(ϕ_1_unscaled .* 1),"black")
-makeDistributionPlot(μ_1,"black")
 
 ##### Swarm of the groups
 attempts = range(0,22,length=200)
@@ -735,13 +725,13 @@ diagnostics_csv_θ_1 = diagnostics_csv[[occursin(r"theta1.*", elementname) for e
 diagnostics_csv_rest = diagnostics_csv[[occursin(r"^((?!theta).)*$", elementname) for elementname in diagnostics_csv[:, :name]], [:name, :N_Eff]]
 
 println("Max N_eff θ_0 is ",
-    diagnostics_csv_θ_1[diagnostics_csv_θ_0[:,:N_Eff] .>= maximum(diagnostics_csv_θ_0.N_Eff),:][1,1],
+    diagnostics_csv_θ_0[diagnostics_csv_θ_0[:,:N_Eff] .>= maximum(diagnostics_csv_θ_0.N_Eff),:][1,1],
     " = ",
-    diagnostics_csv_θ_1[diagnostics_csv_θ_0[:,:N_Eff] .>= maximum(diagnostics_csv_θ_0.N_Eff),:][1,2])
+    diagnostics_csv_θ_0[diagnostics_csv_θ_0[:,:N_Eff] .>= maximum(diagnostics_csv_θ_0.N_Eff),:][1,2])
 println("Min N_eff θ_0 is ",
-    diagnostics_csv_θ_1[diagnostics_csv_θ_0[:,:N_Eff] .<= minimum(diagnostics_csv_θ_0.N_Eff),:][1,1],
+    diagnostics_csv_θ_0[diagnostics_csv_θ_0[:,:N_Eff] .<= minimum(diagnostics_csv_θ_0.N_Eff),:][1,1],
     " = ",
-    diagnostics_csv_θ_1[diagnostics_csv_θ_0[:,:N_Eff] .<= minimum(diagnostics_csv_θ_0.N_Eff),:][1,2])
+    diagnostics_csv_θ_0[diagnostics_csv_θ_0[:,:N_Eff] .<= minimum(diagnostics_csv_θ_0.N_Eff),:][1,2])
 println("Max N_eff θ_1 is ",
     diagnostics_csv_θ_1[diagnostics_csv_θ_1[:,:N_Eff] .>= maximum(diagnostics_csv_θ_1.N_Eff),:][1,1],
     " = ",
@@ -756,17 +746,24 @@ for i = 1:size(diagnostics_csv_rest,1)
 end
 
 using LaTeXStrings
-plot(1200:1800,θ_0[1200:1800,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
-Plots.savefig(projDir*"/figs/stuckChain-theta0-Stan.pdf")
+chstart = 650000
+chend = 655000
+plot(chstart:chend,θ_0[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
+Plots.savefig(projDir*"/figs/unstuckChain-theta0-Stan.pdf")
 
-plot(1200:1800,θ_1[1200:1800,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{1_j}")
-Plots.savefig(projDir*"/figs/stuckChain-theta1-Stan.pdf")
+plot(chstart:chend,θ_1[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{1_j}")
+Plots.savefig(projDir*"/figs/unstuckChain-theta1-Stan.pdf")
 
-plot(1200:1800,σ[1200:1800],legend=:topleft,xlabel="sample nr",label=L"\sigma")
-plot!(1200:1800,ϕ_0[1200:1800],xlabel="sample nr",label=L"\varphi_0")
-plot!(1200:1800,ϕ_1[1200:1800],xlabel="sample nr",label=L"\varphi_1")
-plot!(1200:1800,μ_0[1200:1800],xlabel="sample nr",label=L"\mu_0")
-plot!(1200:1800,μ_1[1200:1800],xlabel="sample nr",label=L"\mu_1")
-plot!(1200:1800,τ_0[1200:1800],xlabel="sample nr",label=L"\tau_0")
-plot!(1200:1800,τ_1[1200:1800],xlabel="sample nr",label=L"\tau_1")
-Plots.savefig(projDir*"/figs/stuckChain-restPars-Stan.pdf")
+plot(chstart:chend,σ[chstart:chend],legend=:topleft,xlabel="sample nr",label=L"\sigma")
+plot!(chstart:chend,ϕ_0[chstart:chend],xlabel="sample nr",label=L"\varphi_0")
+plot!(chstart:chend,ϕ_1[chstart:chend],xlabel="sample nr",label=L"\varphi_1")
+plot!(chstart:chend,μ_0[chstart:chend],xlabel="sample nr",label=L"\mu_0")
+plot!(chstart:chend,μ_1[chstart:chend],xlabel="sample nr",label=L"\mu_1")
+Plots.savefig(projDir*"/figs/unstuckChain-restPars-Stan.pdf")
+plot(chstart:chend,τ_0[chstart:chend],xlabel="sample nr",label=L"\tau_0")
+plot!(chstart:chend,τ_1[chstart:chend],xlabel="sample nr",label=L"\tau_1")
+Plots.savefig(projDir*"/figs/unstuckChain-tau-Stan.pdf")
+
+makeDistributionPlot(τ_1,"red")
+plot!(grid=false,xlabel=L"\tau_1")
+Plots.savefig(projDir*"/figs/tau1-Stan.pdf")
