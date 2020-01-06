@@ -1,10 +1,12 @@
 using Distributed
 @everywhere using Random
 @everywhere using Statistics
+@everywhere using LinearAlgebra  # for using eigen
 using Plots
 using StatsPlots
 using SharedArrays
 using StatsBase     # for fitting histograms
+
 
 ##### Some local setups
 # If run from command line externally:
@@ -125,7 +127,16 @@ projDir= "/lhome/johhub/Desktop/ABDA/A7"
 #####
 #%% Functions ##################################################################
 # @everywhere to make them known to all workers
-@everywhere function mySliceSampler(pdf_log, x_0, w, m, N = 2000, burnIn = 1000)
+# Progress bar from Jesper:
+@everywhere function progressbar(i,N, msg = "")
+    if mod(i,round(N/1000))==0
+        print("\e[2K") # clear whole line
+        print("\e[1G") # move cursor to column 1
+        print(msg * " => " * string(round(i/N*100,sigdigits=4)) * "%")
+    end
+end
+
+@everywhere function mySliceSampler(pdf_log, x_0, w, N = 2000; burnIn = 1000, m=100, verbose=false, msg="")
     # REQUIRES MODULES:
     # Random
     #
@@ -152,12 +163,15 @@ projDir= "/lhome/johhub/Desktop/ABDA/A7"
     #    x_0 = [x_0]
     #end
 
-
     for ii in 1:(N+burnIn)
+        if verbose
+            progressbar(ii,N+burnIn,msg)
+        end
+
         # Update the new x progressively for each dimension:
         L   = 1*x_0  # R and L need to be of same dimension, because we apply the pdf upon those!
         R   = 1*x_0
-        x_1 = 1*x_0  # "1*" needed, otherwise x_0 suddendly takes mysterious values
+        x_1 = 1*x_0  # "1*" needed, for correct type
         for d in randperm(D)
             ### 1) Make the Slice
             # random "vertical" position
@@ -225,6 +239,131 @@ projDir= "/lhome/johhub/Desktop/ABDA/A7"
     end
 
     return x_s, pdflog_x_s
+end
+
+
+@everywhere function mySliceSampler_Cov(pdf_log, x_0, C, N; burnIn = 1000, m=100, verbose=true, msg="")
+    # REQUIRES MODULES:
+    # Random
+    # LinearAlgebra
+    #
+    # INPUT:
+    # pdf_log --> log-pdf of the target distribution (a function)
+    # x_init --> inital vector (mode of a previous run) of x (dimension 1xD), where D dimension of pdf
+    # C --> Covariance matrix of a previous burn-in of the same log-pdf
+    # m --> integer limiting the slice size to m*w
+    # N --> number of sample points
+    # burnIn --> number of burn-in samples (optional, results will be discarded)
+    #
+    # OUTPUT:
+    # x_s --> sampled x values (NxD), only keep values after full permutations along dimensions
+    # pdflog_x_s --> log-pdf of sampled values
+
+    lamda,Eigvec = LinearAlgebra.eigen(C)        # eigenvalue and matrix of eigenvectors, C is the covariance matrix of the coordinates of a previous run
+    w = sqrt.(abs.(lamda))    # the single standard-deviations along the dimensions
+
+    D = length(x_0)  # the dimension of the distribution (nr of coordinates)
+    x_s = Array{Float64}(undef,N,D)   # Samples (NxD), preallocate array, with undefined values
+    pdflog_x_s = Array{Float64}(undef,N)   # (unnormalised) log-prob of sampled points (Nx1)
+                                           # for reducing evaluations
+
+    pdflog_x_1 = pdf_log(x_0);       # first value is already known!
+    wd = zeros(D)       # preallocating window
+
+
+    for ii in 1:(N+burnIn)
+        if verbose
+            progressbar(ii,N+burnIn,msg)
+        end
+
+        # Update the new x progressively for each dimension:
+        L   = 1*x_0  # R and L need to be of same dimension, because we apply the pdf upon those!
+        R   = 1*x_0
+        x_1 = 1*x_0  # "1*" needed, for correct type
+        for d in randperm(D)
+            ### 1) Make the Slice
+            # random "vertical" position
+            #vertical = rand() * pdf_log(x_0) # in normal space
+            z = pdflog_x_1 + log(rand())                # saving evaluations, pdflog_x_1 was updated for current permutation in the end
+
+            ### 2) Make the window, "Stepping-out" alogrithm
+            # Randomly place a window, containing x_0:
+            # Here the entire boundaries are updates simultaneously, to
+            # account for the covariation between parameters!
+            wd = w[d]*Eigvec[:,d]    # associated co-std value times its eigenvector gives estimate of window
+            L = x_0 - rand() * wd
+            R = L + wd
+
+            # Randomly share the max window size among left/right:
+            J = floor(m*rand());
+            K = (m-1) - J;
+
+            # Extend window to the left, until outside slice or allowance seizes:
+            while ((J > 0) && (z < pdf_log(L)))
+                #println("Lefting")
+                L -= wd
+                J -= 1
+            end
+
+            # Extend window to the right, until outside slice or allowance seizes:
+            while ((K > 0) && (z < pdf_log(R)))
+                #println("Righting")
+                R += wd
+                K -= 1
+            end
+
+            ### 3) Sample from window
+            # finding an allowable point:
+            while true
+                # Updating over all dimensions simultaneously, to account for the
+                # covariation between parameters:
+                x_1 = L + rand() * (R - L)
+
+                # this + breaking out of loop reduces the amount of log-pdf evaluations:
+                pdflog_x_1 = pdf_log(x_1)
+
+                if (pdflog_x_1 >= z)     # new value found
+                    x_0 = 1*x_1     # update value of all dimensions
+                    break
+                # Value was not within slice, shrink the interval:
+                #elseif all(x_1 .> x_0)
+                elseif sign.(R-x_0) == sign.(x_1-x_0)
+                    R = 1*x_1
+                else
+                    L = 1*x_1
+                end
+            end
+
+        end # end of permutating through dimensions
+
+        ### 4) Update the chain:
+        # Just overwrite the burnIn by using modular arithmetic:
+        i = 1 + (ii-1)%N    # gives 1,2,3,...N,1,2,3,...,(N+burnIn)
+        x_s[i,:] = x_1    # sample point, after one round of permutations
+        pdflog_x_s[i] = pdflog_x_1 # now contains log_pdf of all new coordinates of new point, since has been updated at each permutation
+        # note that x_0 has been updated during the permutations
+
+    end
+
+    return x_s, pdflog_x_s
+end
+
+# Diagonal Slice sampler using burn-ins, adapted from Jesper's code:
+@everywhere function diagonalSliceSampling(pdf_log, x_0, w, N = 10_000, burnIn = 1_000; m = 100, verbose = true)
+    # pre-burn-in run for getting a reasonable start point for the burn-in:
+    x_s, l_pdf = mySliceSampler(pdf_log, x_0, w, burnIn; burnIn=0, m=m, verbose=verbose, msg="pre-burn-in")
+    x_0 = x_s[argmax(l_pdf),:]   # Mode of pre-burn-in is new start point
+    w = std(x_s, dims=1)  # a new guess for the window, my samples are column vectors
+
+    println()
+    # burn-in run for getting an idea about parameter covariation (bread-crums):
+    x_s, l_pdf = mySliceSampler(pdf_log, x_0, w, burnIn; burnIn=0, m=m, verbose=verbose, msg="burn-in")
+
+    println()
+    # actual diagonal slice Sampling run, taking advantage of parameter Covariation
+    C = cov(x_s)
+    x_0 = x_s[argmax(l_pdf),:] # Mode of burn-in is new start point
+    return mySliceSampler_Cov(pdf_log, x_0, C, N; burnIn=0, m=m, verbose=verbose, msg="MCMC run")
 end
 
 
@@ -626,11 +765,13 @@ chainPdf = SharedArray{Float64}(N_chain,noOfChains);
 # now using @distributed, prefix with @sync to wait for completion
 @sync @distributed for k in 1:noOfChains
     x_start = rand(Float64,noParams) * 0.5   # initial vector
-    chain[:,:,k], chainPdf[:,k] = mySliceSampler(log_posterior,x_start,w,m,N_chain,burnIn);
+    chain[:,:,k], chainPdf[:,k] = diagonalSliceSampling(log_posterior,x_start,w,N_chain,burnIn,m=m,verbose=true);
 end
+
 # My machine: 4 cores, i7-7500U 2,7 GHz x 2 each, on Linux
-# N=10^5 takes around 8.5 min
+# N=10^5 takes around 
 # N=10^6 takes around
+
 
 
 ################################################################################
@@ -868,23 +1009,23 @@ Plots.savefig(projDir*"/figs/swarm-groups-Slice.pdf")
 
 ### Chain diagnostics
 using LaTeXStrings
-chstart = 650000
-chend = 655000
+chstart = 62200
+chend = 62500
 plot(chstart:chend,θ_0[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
-Plots.savefig(projDir*"/figs/unstuckChain-theta0-Slice.pdf")
+Plots.savefig(projDir*"/figs/stuckChain-theta0-Slice.pdf")
 
 plot(chstart:chend,θ_1[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{1_j}")
-Plots.savefig(projDir*"/figs/unstuckChain-theta1-Slice.pdf")
+Plots.savefig(projDir*"/figs/stuckChain-theta1-Slice.pdf")
 
 plot(chstart:chend,σ[chstart:chend],legend=:topleft,xlabel="sample nr",label=L"\sigma")
 plot!(chstart:chend,ϕ_0[chstart:chend],xlabel="sample nr",label=L"\varphi_0")
 plot!(chstart:chend,ϕ_1[chstart:chend],xlabel="sample nr",label=L"\varphi_1")
 plot!(chstart:chend,μ_0[chstart:chend],xlabel="sample nr",label=L"\mu_0")
 plot!(chstart:chend,μ_1[chstart:chend],xlabel="sample nr",label=L"\mu_1")
-Plots.savefig(projDir*"/figs/unstuckChain-restPars-Slice.pdf")
+Plots.savefig(projDir*"/figs/stuckChain-restPars-Slice.pdf")
 plot(chstart:chend,τ_0[chstart:chend],xlabel="sample nr",label=L"\tau_0")
 plot!(chstart:chend,τ_1[chstart:chend],xlabel="sample nr",label=L"\tau_1")
-Plots.savefig(projDir*"/figs/unstuckChain-tau-Slice.pdf")
+Plots.savefig(projDir*"/figs/stuckChain-tau-Slice.pdf")
 
 makeDistributionPlot(τ_1,"red")
 plot!(grid=false,xlabel=L"\tau_1")
