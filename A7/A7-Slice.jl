@@ -750,7 +750,7 @@ end
 #%% Chain Setup
 noParams = 2*J+7
 noOfChains = 4
-N = 1*10^5                # total number of samples
+N = 1*10^6                # total number of samples
 N_chain = convert(Int64, N / noOfChains)   # samples per chain
 burnIn = 10^3
 w = ones(Float64,noParams) * 0.1         # typical window size
@@ -769,7 +769,7 @@ chainPdf = SharedArray{Float64}(N_chain,noOfChains);
 end
 
 # My machine: 4 cores, i7-7500U 2,7 GHz x 2 each, on Linux
-# N=10^5 takes around 
+# N=10^5 takes around
 # N=10^6 takes around
 
 
