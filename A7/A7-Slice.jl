@@ -663,34 +663,32 @@ end
     # Log-normal distribution
     # Logarithmise the normal pdfs in series:
     # We can leave out the 1/sqrt(2π) since it does not change sampling from the posterior
-    return sum(-log(σ) .- 0.5 .* ((θ .- μ) ./ σ).^2)
+    return sum(-log(σ) .- 0.5 * ((θ .- μ) ./ σ).^2)
 end
 
 @everywhere function log_lklhd_fct(J,jointParams::Array{Float64},zlogy::Array{Float64,1},zx::Array{Float64,1},ind::Array{Int64,1},K_j::Array{Int64,1})
     # return the joint lklhd of the given input data
     # Reparametrise, s.t. we sample eta ~ N(0,1) instead of theta. Theta is then reconstructed.
     η_0 = jointParams[1:J]
-    η_1 = jointParams[J+1:2*J]
+    η_1 = jointParams[(J+1):(2*J)]
     μ_0, ϕ_0, μ_1, ϕ_1, σ, τ_0, τ_1 = jointParams[(2*J+1):end]
 
     # Reconstruct thetas (span up by kids indicator K_j):
-    θ_0 = (μ_0 .+ ϕ_0 .* K_j) .+ τ_0 .* η_0
-    θ_1 = (μ_1 .+ ϕ_1 .* K_j) .+ τ_1 .* η_1
+    θ_0 = (μ_0 .+ ϕ_0 * K_j) .+ τ_0 * η_0
+    θ_1 = (μ_1 .+ ϕ_1 * K_j) .+ τ_1 * η_1
 
     jointLklhd = 0.0
 
-    if (σ > 0)
-        # Logarithmise the normal pdfs in series:
-        # summing up:
-        # note, that we go through each observation, vectorising is hard:
-        # zlogy ~ N(theta0 + theta1*zx, sigma)
-        for i in 1:length(zlogy)
-            j = ind[i]
-            regMean = θ_0[j] + θ_1[j] * zx[i]   # regression mean
-            jointLklhd += -log(σ) - 0.5 * ((zlogy[i] - regMean) / σ)^2
-        end
-    else
-        jointLklhd = -Inf
+    # the case of sigma <= 0 is already caught by the posterior main function
+
+    # Logarithmise the normal pdfs in series:
+    # summing up:
+    # note, that we go through each observation, vectorising is hard:
+    # zlogy ~ N(theta0 + theta1*zx, sigma)
+    for i in 1:length(zlogy)
+        j = ind[i]
+        regMean = θ_0[j] + θ_1[j] * zx[i]   # regression mean
+        jointLklhd += -log(σ) - 0.5 * ((zlogy[i] - regMean) / σ)^2
     end
 
     return jointLklhd
@@ -703,7 +701,7 @@ end
 @everywhere function log_posterior_fct(J,jointParams::Array{Float64}, zlogy, zx, ind, child_j)
     # The joint log-pdf posterior of the model
     η_0 = jointParams[1:J]
-    η_1 = jointParams[J+1:2*J]
+    η_1 = jointParams[(J+1):(2*J)]
     μ_0, ϕ_0, μ_1, ϕ_1, σ, τ_0, τ_1 = jointParams[(2*J+1):end]
 
     #μ = μ_0 .+ ϕ .* K_j.*1.0    # current sampled μ for each individual -> this evaluation from A6 has now moved to the likelihood function due to reparametrisation!
@@ -1043,8 +1041,8 @@ Plots.savefig(projDir*"/figs/swarm-groups-Slice.pdf")
 
 ### Chain diagnostics
 using LaTeXStrings
-chstart = 62200
-chend = 62500
+chstart = 650000
+chend = 655000
 plot(chstart:chend,θ_0[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
 Plots.savefig(projDir*"/figs/stuckChain-theta0-Slice.pdf")
 
