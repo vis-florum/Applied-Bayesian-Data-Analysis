@@ -752,7 +752,7 @@ end
 #%% Chain Setup
 noParams = 2*J+7
 noOfChains = 4
-N = 1*10^6                # total number of samples
+N = 4*10^6                # total number of samples
 N_chain = convert(Int64, N / noOfChains)   # samples per chain
 burnIn = 10^4   # the larger the burn-In the better the performance (better diagonal)
 w = ones(Float64,noParams) * 0.1         # typical window size
@@ -777,7 +777,7 @@ end
 # My machine: 4 cores, i7-7500U 2,7 GHz x 2 each, on Linux
 # N=10^5 takes around
 # N=10^6 takes around 9 min
-
+# N=4*10^6 takes around 40 min
 
 
 ################################################################################
@@ -812,7 +812,7 @@ end
 
 
 ### Exporting
-CSV.write(projDir*"/sliceSamples/export_samples.csv",
+CSV.write(projDir*"/sliceSamples/export_samples_many.csv",
           DataFrame([θ_0 θ_1 μ_0 ϕ_0 μ_1 ϕ_1 σ τ_0 τ_1]),
           writeheader=true)
 
