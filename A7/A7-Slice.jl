@@ -6,6 +6,7 @@ using Plots
 using StatsPlots
 using SharedArrays
 using StatsBase     # for fitting histograms
+using CSV, DataFrames   # for saving results as CSV for later
 
 
 ##### Some local setups
@@ -142,15 +143,15 @@ end
     #
     # INPUT:
     # pdf_log --> log-pdf of the target distribution (a function)
-    # x_init --> inital vector of x (dimension 1xD), where D dimension of pdf
-    # w --> typical slice size, for a window (dimension 1xD)
+    # x_0 --> inital vector of x (dimension Dx1 or 1xD), where D dimension of pdf
+    # w --> typical slice size, for a window (dimension Dx1 or 1xD)
     # m --> integer limiting the slice size to m*w
     # N --> number of sample points
     # burnIn --> number of burn-in samples (optional, results will be discarded)
     #
     # OUTPUT:
     # x_s --> sampled x values (NxD), only keep values after full permutations along dimensions
-    # pdflog_x_s --> log-pdf of sampled values
+    # pdflog_x_s --> log-pdf of sampled values (Nx1)
 
     D = length(x_0)  # the dimension of the distribution (nr of coordinates)
     x_s = Array{Float64}(undef,N,D)   # Samples (NxD), preallocate array, with undefined values
@@ -232,12 +233,10 @@ end
         ### 4) Update the chain:
         # Just overwrite the burnIn by using modular arithmetic:
         i = 1 + (ii-1)%N    # gives 1,2,3,...N,1,2,3,...,(N+burnIn)
-        x_s[i,:] = x_1    # sample point, after one round of permutations
+        x_s[i,:] = x_1     # different directions in arrays n'importe, sample point, after one round of permutations
         pdflog_x_s[i] = pdflog_x_1 # now contains log_pdf of all new coordinates of new point, since has been updated at each permutation
         # note that x_0 has been updated during the permutations
-
     end
-
     return x_s, pdflog_x_s
 end
 
@@ -249,7 +248,7 @@ end
     #
     # INPUT:
     # pdf_log --> log-pdf of the target distribution (a function)
-    # x_init --> inital vector (mode of a previous run) of x (dimension 1xD), where D dimension of pdf
+    # x_0 --> inital vector (mode of a previous run) of x (dimension 1xD), where D dimension of pdf
     # C --> Covariance matrix of a previous burn-in of the same log-pdf
     # m --> integer limiting the slice size to m*w
     # N --> number of sample points
@@ -259,8 +258,8 @@ end
     # x_s --> sampled x values (NxD), only keep values after full permutations along dimensions
     # pdflog_x_s --> log-pdf of sampled values
 
-    lamda,Eigvec = LinearAlgebra.eigen(C)        # eigenvalue and matrix of eigenvectors, C is the covariance matrix of the coordinates of a previous run
-    w = sqrt.(abs.(lamda))    # the single standard-deviations along the dimensions
+    λ,Eigvec = LinearAlgebra.eigen(C)        # eigenvalue and matrix of eigenvectors, C is the covariance matrix of the coordinates of a previous run
+    w = sqrt.(abs.(λ))    # the single standard-deviations along the dimensions
 
     D = length(x_0)  # the dimension of the distribution (nr of coordinates)
     x_s = Array{Float64}(undef,N,D)   # Samples (NxD), preallocate array, with undefined values
@@ -270,6 +269,11 @@ end
     pdflog_x_1 = pdf_log(x_0);       # first value is already known!
     wd = zeros(D)       # preallocating window
 
+    L = similar(x_0)
+    R = similar(x_0)
+    x_1 = similar(x_0)
+    # Using dots for array assignment is a bit faster
+
 
     for ii in 1:(N+burnIn)
         if verbose
@@ -277,9 +281,9 @@ end
         end
 
         # Update the new x progressively for each dimension:
-        L   = 1*x_0  # R and L need to be of same dimension, because we apply the pdf upon those!
-        R   = 1*x_0
-        x_1 = 1*x_0  # "1*" needed, for correct type
+        L   .= x_0  # R and L need to be of same dimension, because we apply the pdf upon those!
+        R   .= x_0
+        x_1 .= x_0  # "1*" needed, for correct type
         for d in randperm(D)
             ### 1) Make the Slice
             # random "vertical" position
@@ -291,8 +295,8 @@ end
             # Here the entire boundaries are updates simultaneously, to
             # account for the covariation between parameters!
             wd = w[d]*Eigvec[:,d]    # associated co-std value times its eigenvector gives estimate of window
-            L = x_0 - rand() * wd
-            R = L + wd
+            L .= x_0 .- rand() .* wd
+            R .= L .+ wd
 
             # Randomly share the max window size among left/right:
             J = floor(m*rand());
@@ -301,14 +305,14 @@ end
             # Extend window to the left, until outside slice or allowance seizes:
             while ((J > 0) && (z < pdf_log(L)))
                 #println("Lefting")
-                L -= wd
+                L .-= wd
                 J -= 1
             end
 
             # Extend window to the right, until outside slice or allowance seizes:
             while ((K > 0) && (z < pdf_log(R)))
                 #println("Righting")
-                R += wd
+                R .+= wd
                 K -= 1
             end
 
@@ -317,20 +321,21 @@ end
             while true
                 # Updating over all dimensions simultaneously, to account for the
                 # covariation between parameters:
-                x_1 = L + rand() * (R - L)
+                x_1 .= L .+ rand() .* (R .- L)
 
                 # this + breaking out of loop reduces the amount of log-pdf evaluations:
                 pdflog_x_1 = pdf_log(x_1)
 
                 if (pdflog_x_1 >= z)     # new value found
-                    x_0 = 1*x_1     # update value of all dimensions
+                    x_0 .= 1*x_1     # update value of all dimensions
                     break
+                end
                 # Value was not within slice, shrink the interval:
                 #elseif all(x_1 .> x_0)
-                elseif sign.(R-x_0) == sign.(x_1-x_0)
-                    R = 1*x_1
+                if sign.(R .- x_0) == sign.(x_1 .- x_0)
+                    R .= 1*x_1
                 else
-                    L = 1*x_1
+                    L .= 1*x_1
                 end
             end
 
@@ -342,9 +347,7 @@ end
         x_s[i,:] = x_1    # sample point, after one round of permutations
         pdflog_x_s[i] = pdflog_x_1 # now contains log_pdf of all new coordinates of new point, since has been updated at each permutation
         # note that x_0 has been updated during the permutations
-
     end
-
     return x_s, pdflog_x_s
 end
 
@@ -471,7 +474,7 @@ function makeDistributionPlot(X, color="blue"; ann=true, offset=0.0, scale=1.0)
     μ_bar = mean(X);
     left,right = hdi(X);
 
-    h = fit(Histogram, X, nbins=100)
+    h = fit(Histogram, X, nbins=200)
     w = h.weights      # weights of each bar
     e = h.edges[1]     # edges of the bars (must be +1 more than bars)
 
@@ -536,7 +539,7 @@ function makeDistributionPlot!(X, color="blue"; ann=true, offset=0.0, scale=1.0)
     μ_bar = mean(X);
     left,right = hdi(X);
 
-    h = fit(Histogram, X, nbins=100)
+    h = fit(Histogram, X, nbins=200)
     w = h.weights      # weights of each bar
     e = h.edges[1]     # edges of the bars (must be +1 more than bars)
 
@@ -638,7 +641,6 @@ end
 
 #####
 #%% Priors, Likelihoods, Posteriors ############################################
-#####
 @everywhere function log_prior_flat(X::Float64)
     return 0.0  # or any other constant value, for the posterior it doesn't matter
 end
@@ -664,7 +666,7 @@ end
     return sum(-log(σ) .- 0.5 .* ((θ .- μ) ./ σ).^2)
 end
 
-@everywhere function log_lklhd_fct(J,jointParams::Array{Float64},zlogy::Array{Float64,1},ind::Array{Int64,1},K_j::Array{Int64,1})
+@everywhere function log_lklhd_fct(J,jointParams::Array{Float64},zlogy::Array{Float64,1},zx::Array{Float64,1},ind::Array{Int64,1},K_j::Array{Int64,1})
     # return the joint lklhd of the given input data
     # Reparametrise, s.t. we sample eta ~ N(0,1) instead of theta. Theta is then reconstructed.
     η_0 = jointParams[1:J]
@@ -695,8 +697,11 @@ end
 end
 
 
-@everywhere function log_priors(J,jointParams::Array{Float64})
-    # The joint log-pdf of all the priors in the model
+# Skipping the prior funciton speeds up the process.
+# Still needs concretising by data
+# Avoid using global vars, since slow
+@everywhere function log_posterior_fct(J,jointParams::Array{Float64}, zlogy, zx, ind, child_j)
+    # The joint log-pdf posterior of the model
     η_0 = jointParams[1:J]
     η_1 = jointParams[J+1:2*J]
     μ_0, ϕ_0, μ_1, ϕ_1, σ, τ_0, τ_1 = jointParams[(2*J+1):end]
@@ -704,12 +709,13 @@ end
     #μ = μ_0 .+ ϕ .* K_j.*1.0    # current sampled μ for each individual -> this evaluation from A6 has now moved to the likelihood function due to reparametrisation!
 
     if (σ > 0) && (τ_0 > 0) && (τ_1 > 0)
-        return log_prior_theta(η_0,zeros(J),1.0) +  # eta0 ~ N(0,1)
+        return log_lklhd_fct(J,jointParams::Array{Float64}, zlogy, zx, ind, child_j) +
+               log_prior_theta(η_0,zeros(J),1.0) +  # eta0 ~ N(0,1)
                log_prior_theta(η_1,zeros(J),1.0) +  # eta1 ~ N(0,1)
-               log_prior_flat(μ_0) +
-               log_prior_flat(μ_1) +
-               log_prior_flat(ϕ_0) +
-               log_prior_flat(ϕ_1) +
+               #log_prior_flat(μ_0) +   # is zero
+               #log_prior_flat(μ_1) +   # is zero
+               #log_prior_flat(ϕ_0) +   # is zero
+               #log_prior_flat(ϕ_1) +   # is zero
                log_prior_flat_positiveOnly(σ) +
                log_prior_flat_positiveOnly(τ_0) +
                log_prior_flat_positiveOnly(τ_1)
@@ -717,6 +723,7 @@ end
         return -Inf
     end
 end
+
 
 #%% Logarithmise and Transform Data ############################################
 @everywhere J = maximum(ind)    # number of individuals
@@ -728,8 +735,8 @@ end
 @everywhere logMean = mean(logy)
 @everywhere logStd = std(logy)
 
-@everywhere global trainMean = mean(x)
-@everywhere global trainStd = std(x)
+@everywhere trainMean = mean(x)
+@everywhere trainStd = std(x)
 
 # Mean-centre and scale each element:
 @everywhere zlogy = (logy .- logMean) ./ logStd;
@@ -737,12 +744,9 @@ end
 # Standardise training data:
 @everywhere zx = (x .- trainMean) ./ trainStd;
 
-#%% Concretise the functions by including the data #############################
-@everywhere log_lklhd(jointParams::Array{Float64}) =
-            log_lklhd_fct(J,jointParams::Array{Float64}, zlogy, ind, child_j)
+#% Concretise the posterior by including the data #############################
 @everywhere log_posterior(jointParams::Array{Float64}) =
-            log_lklhd(jointParams::Array{Float64}) +
-            log_priors(J,jointParams::Array{Float64})
+            log_posterior_fct(J,jointParams::Array{Float64}, zlogy, zx, ind, child_j)
 
 
 ################################################################################
@@ -752,13 +756,17 @@ noParams = 2*J+7
 noOfChains = 4
 N = 1*10^6                # total number of samples
 N_chain = convert(Int64, N / noOfChains)   # samples per chain
-burnIn = 10^3
+burnIn = 10^4   # the larger the burn-In the better the performance (better diagonal)
 w = ones(Float64,noParams) * 0.1         # typical window size
 m = 100                             # multiplier for maximum window size
 
 #%% MCMC run, make several chains
 chain = SharedArray{Float64}(N_chain,noParams,noOfChains);
 chainPdf = SharedArray{Float64}(N_chain,noOfChains);
+
+# Prerun to initialise the functions:
+x_start = rand(Float64,noParams) * 0.5
+@time trash1, trash2 = diagonalSliceSampling(log_posterior,x_start,w,100,1000,m=m,verbose=true);
 
 # (using threads for parallel computing (other stuff didn't work)):
 # Threads.@threads led to problems too
@@ -770,7 +778,7 @@ end
 
 # My machine: 4 cores, i7-7500U 2,7 GHz x 2 each, on Linux
 # N=10^5 takes around
-# N=10^6 takes around
+# N=10^6 takes around 9 min
 
 
 
@@ -803,6 +811,32 @@ for j = 1:J
     θ_0[:,j] = (μ_0 .+ ϕ_0 .* child_j[j]) .+ τ_0 .* η_0[j]
     θ_1[:,j] = (μ_1 .+ ϕ_1 .* child_j[j]) .+ τ_1 .* η_1[j]
 end
+
+
+### Exporting
+CSV.write(projDir*"/sliceSamples/export_samples.csv",
+          DataFrame([θ_0 θ_1 μ_0 ϕ_0 μ_1 ϕ_1 σ τ_0 τ_1]),
+          writeheader=true)
+
+### Importing, if rerun
+# # read into a DataFrame:
+# chain_csv = CSV.read(projDir*"/sliceSamples/export_samples.csv"; comment="#", normalizenames=true)
+#
+# θ_0 = Array{Float64,2}(undef,N,J)
+# θ_1 = Array{Float64,2}(undef,N,J)
+# for j in 1:J
+#     θ_0[:,j] = chain_csv[:,j]
+#     θ_1[:,j] = chain_csv[:,J+j]
+# end
+# μ_0 = chain_csv[:,2*J+1]
+# ϕ_0 = chain_csv[:,2*J+2]
+# μ_1 = chain_csv[:,2*J+3]
+# ϕ_1 = chain_csv[:,2*J+4]
+# σ   = chain_csv[:,2*J+5]
+# τ_0 = chain_csv[:,2*J+6]
+# τ_1 = chain_csv[:,2*J+7]
+###
+
 
 #####
 # Autocorrelation and ESS
