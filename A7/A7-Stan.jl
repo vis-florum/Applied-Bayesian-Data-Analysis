@@ -687,6 +687,17 @@ end
 Plots.savefig(projDir*"/figs/allcurves-Stan.pdf")
 
 
+### Task 5 (sigma)
+# Import sigma from A6
+A6_import = CSV.read(projDir*"/export_sigma_A6.csv"; header=false)
+σ_A6 = A6_import[:,1]
+σ_A6_unscaled = A6_import[:,2]
+makeDistributionPlot(σ,"blue")
+makeDistributionPlot!(σ_A6,"black")
+plot!(grid=false,xlabel=L"\sigma")
+Plots.savefig(projDir*"/figs/sigma-comp-Stan.pdf")
+
+
 ##### Diagnostics to compare to Jesper:
 makeDistributionPlot(τ_0,"black")
 Plots.savefig(projDir*"/figs/tau0-Stan.pdf")
