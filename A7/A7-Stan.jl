@@ -555,8 +555,8 @@ global μ_1_unscaled = logStd.*μ_1./trainStd
 global ϕ_1_unscaled = logStd.*ϕ_1./trainStd
 
 global τ_0_unscaled = logStd.* sqrt.(τ_0.^2 .+ τ_1.^2 .* trainMean.^2 ./ trainStd.^2)
-global τ_tilde_1_unscaled = sqrt.(2 .* logStd.^2 .* τ_1.^2 .* trainMean ./ trainStd.^2)
-global τ_1_unscaled = logStd .* τ_1 .* trainMean ./ trainStd
+global τ_tilde_1_unscaled = sqrt.(2 .* trainMean) .* logStd .* τ_1 ./ trainStd
+global τ_1_unscaled = logStd .* τ_1 ./ trainStd
 
 #####
 # Get into non-log space (generates function of input):
@@ -778,3 +778,32 @@ Plots.savefig(projDir*"/figs/unstuckChain-tau-Stan.pdf")
 makeDistributionPlot(τ_1,"red")
 plot!(grid=false,xlabel=L"\tau_1")
 Plots.savefig(projDir*"/figs/tau1-Stan.pdf")
+
+
+##### Just for own reference and playing around with posterior predictions:
+zlogy_pred_kid(xin,Ξ) = mean(μ_0) .+ mean(ϕ_1) .+ (mean(μ_1) + mean(ϕ_1))*((xin - trainMean)/trainStd) .+
+                    sqrt(mean(σ)^2 + mean(τ_0)^2 + mean(τ_1)^2 * ((xin - trainMean)/trainStd)^2).*Ξ
+
+zlogy_pred_kid2(xin,Ξ,ix) = μ_0[ix] + ϕ_1[ix] + (μ_1[ix] + ϕ_1[ix])*((xin - trainMean)/trainStd) +
+                    sqrt(σ[ix]^2 + τ_0[ix]^2 + τ_1[ix]^2 * ((xin - trainMean)/trainStd)^2) * Ξ
+
+zlogy_pred_adult2(xin,Ξ,ix) = μ_0[ix] + μ_1[ix]*((xin - trainMean)/trainStd) +
+                    sqrt(σ[ix]^2 + τ_0[ix]^2 + τ_1[ix]^2 * ((xin - trainMean)/trainStd)^2) * Ξ
+
+
+atts = collect(1:21)
+plot()
+for i = 1:500
+    Ξ = randn()
+    randInd = max(Int(round(rand()*N)),1)
+    pKid = exp.((zlogy_pred_kid2.(atts,Ξ,randInd)) .* logStd .+ logMean)
+    pAdu = exp.((zlogy_pred_adult2.(atts,Ξ,randInd)) .* logStd .+ logMean)
+    plot!(atts,pKid,
+          color="red",linealpha=0.2,
+          legend=false)
+    plot!(atts,pAdu,
+          color="black",linealpha=0.2,
+          legend=false)
+end
+
+plot!()

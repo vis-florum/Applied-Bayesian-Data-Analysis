@@ -817,22 +817,22 @@ CSV.write(projDir*"/sliceSamples/export_samples_many.csv",
           writeheader=true)
 
 ### Importing, if rerun
-# # read into a DataFrame:
-# chain_csv = CSV.read(projDir*"/sliceSamples/export_samples.csv"; comment="#", normalizenames=true)
-#
-# θ_0 = Array{Float64,2}(undef,N,J)
-# θ_1 = Array{Float64,2}(undef,N,J)
-# for j in 1:J
-#     θ_0[:,j] = chain_csv[:,j]
-#     θ_1[:,j] = chain_csv[:,J+j]
-# end
-# μ_0 = chain_csv[:,2*J+1]
-# ϕ_0 = chain_csv[:,2*J+2]
-# μ_1 = chain_csv[:,2*J+3]
-# ϕ_1 = chain_csv[:,2*J+4]
-# σ   = chain_csv[:,2*J+5]
-# τ_0 = chain_csv[:,2*J+6]
-# τ_1 = chain_csv[:,2*J+7]
+# read into a DataFrame:
+chain_csv = CSV.read(projDir*"/sliceSamples/export_samples_many.csv"; comment="#", normalizenames=true)
+
+θ_0 = Array{Float64,2}(undef,N,J)
+θ_1 = Array{Float64,2}(undef,N,J)
+for j in 1:J
+    θ_0[:,j] = chain_csv[:,j]
+    θ_1[:,j] = chain_csv[:,J+j]
+end
+μ_0 = chain_csv[:,2*J+1]
+ϕ_0 = chain_csv[:,2*J+2]
+μ_1 = chain_csv[:,2*J+3]
+ϕ_1 = chain_csv[:,2*J+4]
+σ   = chain_csv[:,2*J+5]
+τ_0 = chain_csv[:,2*J+6]
+τ_1 = chain_csv[:,2*J+7]
 ###
 
 
@@ -876,8 +876,8 @@ global μ_1_unscaled = logStd.*μ_1./trainStd
 global ϕ_1_unscaled = logStd.*ϕ_1./trainStd
 
 global τ_0_unscaled = logStd.* sqrt.(τ_0.^2 .+ τ_1.^2 .* trainMean.^2 ./ trainStd.^2)
-global τ_tilde_1_unscaled = sqrt.(2 .* logStd.^2 .* τ_1.^2 .* trainMean ./ trainStd.^2)
-global τ_1_unscaled = logStd .* τ_1 .* trainMean ./ trainStd
+global τ_tilde_1_unscaled = sqrt.(2 .* trainMean) .* logStd .* τ_1 ./ trainStd
+global τ_1_unscaled = logStd .* τ_1 ./ trainStd
 
 #####
 # Get into non-log space (generates function of input):
@@ -1023,6 +1023,7 @@ Plots.savefig(projDir*"/figs/sigma-unsc-Slice.pdf")
 
 ##### Extra
 makeDistributionPlot(exp.(ϕ_1_unscaled .* 1),"black")
+makeDistributionPlot(θ_1_unscaled[:,2],"black")
 
 ##### Swarm of the groups
 attempts = range(0,22,length=200)
