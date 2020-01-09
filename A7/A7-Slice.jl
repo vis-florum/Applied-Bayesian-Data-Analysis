@@ -7,6 +7,7 @@ using StatsPlots
 using SharedArrays
 using StatsBase     # for fitting histograms
 using CSV, DataFrames   # for saving results as CSV for later
+using LaTeXStrings
 
 
 ##### Some local setups
@@ -666,6 +667,7 @@ end
     return sum(-log(σ) .- 0.5 * ((θ .- μ) ./ σ).^2)
 end
 
+
 @everywhere function log_lklhd_fct(J,jointParams::Array{Float64},zlogy::Array{Float64,1},zx::Array{Float64,1},ind::Array{Int64,1},K_j::Array{Int64,1})
     # return the joint lklhd of the given input data
     # Reparametrise, s.t. we sample eta ~ N(0,1) instead of theta. Theta is then reconstructed.
@@ -776,7 +778,7 @@ end
 
 # My machine: 4 cores, i7-7500U 2,7 GHz x 2 each, on Linux
 # N=10^5 takes around
-# N=10^6 takes around 9 min
+# N=10^6 takes around 9-10 min
 # N=4*10^6 takes around 40 min
 
 
@@ -805,34 +807,40 @@ end
 τ_0 = chain[:,2*J+6,:][:]
 τ_1 = chain[:,2*J+7,:][:]
 
+# This is slower than the for loop below:
+# mu_intrcpt = repeat(μ_0,1,J) + repeat(ϕ_0,1,J) .* repeat(child_j,1,N)'
+# mu_slp     = repeat(μ_1,1,J) + repeat(ϕ_1,1,J) .* repeat(child_j,1,N)'
+# θ_0_t        = mu_intrcpt + η_0 .* repeat(τ_0,1,J)
+# θ_1_t        = mu_slp     + η_1 .* repeat(τ_1,1,J)
+
 for j = 1:J
-    θ_0[:,j] = (μ_0 .+ ϕ_0 .* child_j[j]) .+ τ_0 .* η_0[j]
-    θ_1[:,j] = (μ_1 .+ ϕ_1 .* child_j[j]) .+ τ_1 .* η_1[j]
+    θ_0[:,j] = (μ_0 .+ ϕ_0 .* child_j[j]) .+ τ_0 .* η_0[:,j]
+    θ_1[:,j] = (μ_1 .+ ϕ_1 .* child_j[j]) .+ τ_1 .* η_1[:,j]
 end
 
 
 ### Exporting
-CSV.write(projDir*"/sliceSamples/export_samples_many.csv",
-          DataFrame([θ_0 θ_1 μ_0 ϕ_0 μ_1 ϕ_1 σ τ_0 τ_1]),
-          writeheader=true)
+# CSV.write(projDir*"/sliceSamples/export_samples_many.csv",
+#          DataFrame([θ_0 θ_1 μ_0 ϕ_0 μ_1 ϕ_1 σ τ_0 τ_1]),
+#          writeheader=true)
 
 ### Importing, if rerun
 # read into a DataFrame:
-chain_csv = CSV.read(projDir*"/sliceSamples/export_samples_many.csv"; comment="#", normalizenames=true)
-
-θ_0 = Array{Float64,2}(undef,N,J)
-θ_1 = Array{Float64,2}(undef,N,J)
-for j in 1:J
-    θ_0[:,j] = chain_csv[:,j]
-    θ_1[:,j] = chain_csv[:,J+j]
-end
-μ_0 = chain_csv[:,2*J+1]
-ϕ_0 = chain_csv[:,2*J+2]
-μ_1 = chain_csv[:,2*J+3]
-ϕ_1 = chain_csv[:,2*J+4]
-σ   = chain_csv[:,2*J+5]
-τ_0 = chain_csv[:,2*J+6]
-τ_1 = chain_csv[:,2*J+7]
+# chain_csv = CSV.read(projDir*"/sliceSamples/export_samples_many.csv"; comment="#", normalizenames=true)
+#
+# θ_0 = Array{Float64,2}(undef,N,J)
+# θ_1 = Array{Float64,2}(undef,N,J)
+# for j in 1:J
+#     θ_0[:,j] = chain_csv[:,j]
+#     θ_1[:,j] = chain_csv[:,J+j]
+# end
+# μ_0 = chain_csv[:,2*J+1]
+# ϕ_0 = chain_csv[:,2*J+2]
+# μ_1 = chain_csv[:,2*J+3]
+# ϕ_1 = chain_csv[:,2*J+4]
+# σ   = chain_csv[:,2*J+5]
+# τ_0 = chain_csv[:,2*J+6]
+# τ_1 = chain_csv[:,2*J+7]
 ###
 
 
@@ -1039,24 +1047,23 @@ Plots.savefig(projDir*"/figs/swarm-groups-Slice.pdf")
 
 
 ### Chain diagnostics
-using LaTeXStrings
-chstart = 650000
-chend = 655000
-plot(chstart:chend,θ_0[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
-Plots.savefig(projDir*"/figs/stuckChain-theta0-Slice.pdf")
-
-plot(chstart:chend,θ_1[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{1_j}")
-Plots.savefig(projDir*"/figs/stuckChain-theta1-Slice.pdf")
-
-plot(chstart:chend,σ[chstart:chend],legend=:topleft,xlabel="sample nr",label=L"\sigma")
-plot!(chstart:chend,ϕ_0[chstart:chend],xlabel="sample nr",label=L"\varphi_0")
-plot!(chstart:chend,ϕ_1[chstart:chend],xlabel="sample nr",label=L"\varphi_1")
-plot!(chstart:chend,μ_0[chstart:chend],xlabel="sample nr",label=L"\mu_0")
-plot!(chstart:chend,μ_1[chstart:chend],xlabel="sample nr",label=L"\mu_1")
-Plots.savefig(projDir*"/figs/stuckChain-restPars-Slice.pdf")
-plot(chstart:chend,τ_0[chstart:chend],xlabel="sample nr",label=L"\tau_0")
-plot!(chstart:chend,τ_1[chstart:chend],xlabel="sample nr",label=L"\tau_1")
-Plots.savefig(projDir*"/figs/stuckChain-tau-Slice.pdf")
+# chstart = 650000
+# chend = 655000
+# plot(chstart:chend,θ_0[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
+# Plots.savefig(projDir*"/figs/unstuckChain-theta0-Slice.pdf")
+#
+# plot(chstart:chend,θ_1[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{1_j}")
+# Plots.savefig(projDir*"/figs/unstuckChain-theta1-Slice.pdf")
+#
+# plot(chstart:chend,σ[chstart:chend],legend=:topleft,xlabel="sample nr",label=L"\sigma")
+# plot!(chstart:chend,ϕ_0[chstart:chend],xlabel="sample nr",label=L"\varphi_0")
+# plot!(chstart:chend,ϕ_1[chstart:chend],xlabel="sample nr",label=L"\varphi_1")
+# plot!(chstart:chend,μ_0[chstart:chend],xlabel="sample nr",label=L"\mu_0")
+# plot!(chstart:chend,μ_1[chstart:chend],xlabel="sample nr",label=L"\mu_1")
+# Plots.savefig(projDir*"/figs/unstuckChain-restPars-Slice.pdf")
+# plot(chstart:chend,τ_0[chstart:chend],xlabel="sample nr",label=L"\tau_0")
+# plot!(chstart:chend,τ_1[chstart:chend],xlabel="sample nr",label=L"\tau_1")
+# Plots.savefig(projDir*"/figs/unstuckChain-tau-Slice.pdf")
 
 makeDistributionPlot(τ_1,"red")
 plot!(grid=false,xlabel=L"\tau_1")
@@ -1077,12 +1084,12 @@ Plots.savefig(projDir*"/figs/convergence-Slice.pdf")
 ##### Useful posteriors
 plot(grid=false,xlabel=L"\mu_1")
 makeDistributionPlot!(μ_1,"black")
-Plots.savefig(projDir*"/figs/mu1-Stan.pdf")
+Plots.savefig(projDir*"/figs/mu1-Slice.pdf")
 mean(exp.(μ_1_unscaled))
 
 plot(grid=false,xlabel=L"\varphi_1")
 makeDistributionPlot!(ϕ_1,"blue")
-Plots.savefig(projDir*"/figs/phi1-Stan.pdf")
+Plots.savefig(projDir*"/figs/phi1-Slice.pdf")
 mean(exp.(ϕ_1_unscaled))
 
 plot(grid=false,xlabel="Reaction time",xlims=(200, 600))
@@ -1095,33 +1102,33 @@ plot!(ann=(230,.020,"x = 5"))
 makeDistributionPlot!(E_y_group(10,0),"black",ann=false,scale=1,offset=0.03)
 makeDistributionPlot!(E_y_group(10,1),"red",ann=false,scale=1,offset=0.03)
 plot!(ann=(230,.035,"x = 10"))
-Plots.savefig(projDir*"/figs/groupTimes-Stan.pdf")
+Plots.savefig(projDir*"/figs/groupTimes-Slice.pdf")
 
 
 ##### Just for own reference and playing around with posterior predictions:
-zlogy_pred_kid(xin,Ξ) = mean(μ_0) .+ mean(ϕ_1) .+ (mean(μ_1) + mean(ϕ_1))*((xin - trainMean)/trainStd) .+
-                    sqrt(mean(σ)^2 + mean(τ_0)^2 + mean(τ_1)^2 * ((xin - trainMean)/trainStd)^2).*Ξ
-
-zlogy_pred_kid2(xin,Ξ,ix) = μ_0[ix] + ϕ_1[ix] + (μ_1[ix] + ϕ_1[ix])*((xin - trainMean)/trainStd) +
-                    sqrt(σ[ix]^2 + τ_0[ix]^2 + τ_1[ix]^2 * ((xin - trainMean)/trainStd)^2) * Ξ
-
-zlogy_pred_adult2(xin,Ξ,ix) = μ_0[ix] + μ_1[ix]*((xin - trainMean)/trainStd) +
-                    sqrt(σ[ix]^2 + τ_0[ix]^2 + τ_1[ix]^2 * ((xin - trainMean)/trainStd)^2) * Ξ
-
-
-atts = collect(1:21)
-plot()
-for i = 1:500
-    Ξ = randn()
-    randInd = max(Int(round(rand()*N)),1)
-    pKid = exp.((zlogy_pred_kid2.(atts,Ξ,randInd)) .* logStd .+ logMean)
-    pAdu = exp.((zlogy_pred_adult2.(atts,Ξ,randInd)) .* logStd .+ logMean)
-    plot!(atts,pKid,
-          color="red",linealpha=0.2,
-          legend=false)
-    plot!(atts,pAdu,
-          color="black",linealpha=0.2,
-          legend=false)
-end
-
-plot!()
+# zlogy_pred_kid(xin,Ξ) = mean(μ_0) .+ mean(ϕ_1) .+ (mean(μ_1) + mean(ϕ_1))*((xin - trainMean)/trainStd) .+
+#                     sqrt(mean(σ)^2 + mean(τ_0)^2 + mean(τ_1)^2 * ((xin - trainMean)/trainStd)^2).*Ξ
+#
+# zlogy_pred_kid2(xin,Ξ,ix) = μ_0[ix] + ϕ_1[ix] + (μ_1[ix] + ϕ_1[ix])*((xin - trainMean)/trainStd) +
+#                     sqrt(σ[ix]^2 + τ_0[ix]^2 + τ_1[ix]^2 * ((xin - trainMean)/trainStd)^2) * Ξ
+#
+# zlogy_pred_adult2(xin,Ξ,ix) = μ_0[ix] + μ_1[ix]*((xin - trainMean)/trainStd) +
+#                     sqrt(σ[ix]^2 + τ_0[ix]^2 + τ_1[ix]^2 * ((xin - trainMean)/trainStd)^2) * Ξ
+#
+#
+# atts = collect(1:21)
+# plot()
+# for i = 1:500
+#     Ξ = randn()
+#     randInd = max(Int(round(rand()*N)),1)
+#     pKid = exp.((zlogy_pred_kid2.(atts,Ξ,randInd)) .* logStd .+ logMean)
+#     pAdu = exp.((zlogy_pred_adult2.(atts,Ξ,randInd)) .* logStd .+ logMean)
+#     plot!(atts,pKid,
+#           color="red",linealpha=0.2,
+#           legend=false)
+#     plot!(atts,pAdu,
+#           color="black",linealpha=0.2,
+#           legend=false)
+# end
+#
+# plot!()
