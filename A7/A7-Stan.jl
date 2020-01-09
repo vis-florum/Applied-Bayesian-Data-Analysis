@@ -6,6 +6,7 @@ using StatsBase
 using Random
 using Distributions
 using CSV
+using LaTeXStrings
 
 ##### Some local setups
 # If run from command line externally:
@@ -756,7 +757,7 @@ for i = 1:size(diagnostics_csv_rest,1)
     println("N_eff of ",diagnostics_csv_rest[i,1]," = ",diagnostics_csv_rest[i,2])
 end
 
-using LaTeXStrings
+
 chstart = 650000
 chend = 655000
 plot(chstart:chend,θ_0[chstart:chend,:],legend=false,xlabel="sample nr",ylabel=L"\theta_{0_j}")
@@ -779,6 +780,16 @@ makeDistributionPlot(τ_1,"red")
 plot!(grid=false,xlabel=L"\tau_1")
 Plots.savefig(projDir*"/figs/tau1-Stan.pdf")
 
+# Convergence
+chstart = 150000
+chend = 160000
+plot(grid=false)
+for c = 0:noOfChains-1
+    plot!(chstart:chend,τ_1[chstart+c*N_chain:chend+c*N_chain],
+          xlabel="chain sample nr",
+          label=latexstring("\\tau_1, chain_$(c+1)"),linealpha=0.4)
+end
+Plots.savefig(projDir*"/figs/convergence-Stan.pdf")
 
 ##### Just for own reference and playing around with posterior predictions:
 zlogy_pred_kid(xin,Ξ) = mean(μ_0) .+ mean(ϕ_1) .+ (mean(μ_1) + mean(ϕ_1))*((xin - trainMean)/trainStd) .+
