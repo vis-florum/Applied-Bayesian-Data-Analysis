@@ -1021,14 +1021,11 @@ makeDistributionPlot(σ_unscaled,"black")
 Plots.savefig(projDir*"/figs/sigma-unsc-Slice.pdf")
 
 
-##### Extra
-makeDistributionPlot(exp.(ϕ_1_unscaled .* 1),"black")
-makeDistributionPlot(θ_1_unscaled[:,2],"black")
-
 ##### Swarm of the groups
 attempts = range(0,22,length=200)
 curve_mean_adult = mean.(E_y_group.(attempts,0))
 curve_mean_kid = mean.(E_y_group.(attempts,1))
+col = RGB.(child_i,0,0);
 
 plot(attempts,curve_mean_adult,
     color=:black,ylims=[100,800],linewidth=8,linealpha=0.6)
@@ -1037,6 +1034,7 @@ plot!(attempts,curve_mean_kid,
 curveSwarmGroup(200,0,N,.15)
 curveSwarmGroup(200,1,N,.15)
 plot!(grid=false,xlabel="attempt nr",ylabel="reaction time")
+scatter!(x,y,markersize=2,markercolor=col,markerstrokecolor=col,alpha=0.2)
 Plots.savefig(projDir*"/figs/swarm-groups-Slice.pdf")
 
 
@@ -1063,3 +1061,67 @@ Plots.savefig(projDir*"/figs/stuckChain-tau-Slice.pdf")
 makeDistributionPlot(τ_1,"red")
 plot!(grid=false,xlabel=L"\tau_1")
 Plots.savefig(projDir*"/figs/tau1-Slice.pdf")
+
+# Convergence
+chstart = 150000
+chend = 160000
+plot(grid=false)
+for c = 0:noOfChains-1
+    plot!(chstart:chend,τ_1[chstart+c*N_chain:chend+c*N_chain],
+          xlabel="chain sample nr",
+          label=latexstring("\\tau_1, chain_$(c+1)"),linealpha=0.4)
+end
+Plots.savefig(projDir*"/figs/convergence-Slice.pdf")
+
+
+##### Useful posteriors
+plot(grid=false,xlabel=L"\mu_1")
+makeDistributionPlot!(μ_1,"black")
+Plots.savefig(projDir*"/figs/mu1-Stan.pdf")
+mean(exp.(μ_1_unscaled))
+
+plot(grid=false,xlabel=L"\varphi_1")
+makeDistributionPlot!(ϕ_1,"blue")
+Plots.savefig(projDir*"/figs/phi1-Stan.pdf")
+mean(exp.(ϕ_1_unscaled))
+
+plot(grid=false,xlabel="Reaction time",xlims=(200, 600))
+makeDistributionPlot!(E_y_group(1,0),"black",ann=false)
+makeDistributionPlot!(E_y_group(1,1),"red",ann=false,scale=1,offset=0)
+plot!(ann=(230,.005,"x = 1"))
+makeDistributionPlot!(E_y_group(5,0),"black",ann=false,scale=1,offset=0.015)
+makeDistributionPlot!(E_y_group(5,1),"red",ann=false,scale=1,offset=0.015)
+plot!(ann=(230,.020,"x = 5"))
+makeDistributionPlot!(E_y_group(10,0),"black",ann=false,scale=1,offset=0.03)
+makeDistributionPlot!(E_y_group(10,1),"red",ann=false,scale=1,offset=0.03)
+plot!(ann=(230,.035,"x = 10"))
+Plots.savefig(projDir*"/figs/groupTimes-Stan.pdf")
+
+
+##### Just for own reference and playing around with posterior predictions:
+zlogy_pred_kid(xin,Ξ) = mean(μ_0) .+ mean(ϕ_1) .+ (mean(μ_1) + mean(ϕ_1))*((xin - trainMean)/trainStd) .+
+                    sqrt(mean(σ)^2 + mean(τ_0)^2 + mean(τ_1)^2 * ((xin - trainMean)/trainStd)^2).*Ξ
+
+zlogy_pred_kid2(xin,Ξ,ix) = μ_0[ix] + ϕ_1[ix] + (μ_1[ix] + ϕ_1[ix])*((xin - trainMean)/trainStd) +
+                    sqrt(σ[ix]^2 + τ_0[ix]^2 + τ_1[ix]^2 * ((xin - trainMean)/trainStd)^2) * Ξ
+
+zlogy_pred_adult2(xin,Ξ,ix) = μ_0[ix] + μ_1[ix]*((xin - trainMean)/trainStd) +
+                    sqrt(σ[ix]^2 + τ_0[ix]^2 + τ_1[ix]^2 * ((xin - trainMean)/trainStd)^2) * Ξ
+
+
+atts = collect(1:21)
+plot()
+for i = 1:500
+    Ξ = randn()
+    randInd = max(Int(round(rand()*N)),1)
+    pKid = exp.((zlogy_pred_kid2.(atts,Ξ,randInd)) .* logStd .+ logMean)
+    pAdu = exp.((zlogy_pred_adult2.(atts,Ξ,randInd)) .* logStd .+ logMean)
+    plot!(atts,pKid,
+          color="red",linealpha=0.2,
+          legend=false)
+    plot!(atts,pAdu,
+          color="black",linealpha=0.2,
+          legend=false)
+end
+
+plot!()
